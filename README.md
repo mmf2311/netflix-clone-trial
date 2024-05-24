@@ -33,35 +33,128 @@ This project is a full-stack Netflix clone application designed to showcase the 
 
 ## Architecture
 
-The application is structured as follows:
+### Detailed Architecture Diagram
 
-![Architecture Diagram](architecture-diagram.png)
+```plaintext
+                                         +---------------------+
+                                         |        User         |
+                                         +---------+-----------+
+                                                   |
+                                                   v
+                                         +---------+-----------+
+                                         |   AWS CloudFront    |
+                                         +---------+-----------+
+                                                   |
+                                                   v
+                                         +---------+-----------+
+                                         |       AWS S3        |
+                                         |   (Frontend React)  |
+                                         +---------+-----------+
+                                                   |
+                                                   v
+                                         +---------+-----------+
+                                         |     API Gateway     |
+                                         +---------+-----------+
+                                                   |
+                                                   v
+                                         +---------+-----------+
+                                         |    Load Balancer    |
+                                         +---------+-----------+
+                                                   |
+                                                   v
+                    +--------------+--------------+  +--------------+--------------+  +--------------+--------------+
+                    |  Dev Environment            |  |  Stage Environment          |  |  Prod Environment           |
+                    +--------------+--------------+  +--------------+--------------+  +--------------+--------------+
+                    |    AWS ECS                   |  |    AWS ECS                 |  |    AWS ECS                   |
+                    |  (Node.js Backend)           |  |  (Node.js Backend)         |  |  (Node.js Backend)           |
+                    +--------------+---------------+  +--------------+--------------+  +--------------+--------------+
+                              |                              |                               |
+                              v                              v                               v
+                      +-------+-------+              +-------+-------+               +-------+-------+
+                      |  Amazon RDS   |              |  Amazon RDS   |               |  Amazon RDS   |
+                      |  (Database)   |              |  (Database)   |               |  (Database)   |
+                      +-------+-------+              +-------+-------+               +-------+-------+
+                              |                              |                               |
+                              v                              v                               v
+                  +-----------+-----------+        +-----------+-----------+       +-----------+-----------+
+                  |  Amazon ElastiCache   |        |  Amazon ElastiCache   |       |  Amazon ElastiCache   |
+                  |     (Cache)           |        |     (Cache)           |       |     (Cache)           |
+                  +-----------+-----------+        +-----------+-----------+       +-----------+-----------+
+                              |                              |                               |
+                              v                              v                               v
+                  +-----------+-----------+        +-----------+-----------+       +-----------+-----------+
+                  |   Cached Responses   |        |   Cached Responses   |       |   Cached Responses   |
+                  +----------------------+        +----------------------+       +----------------------+
 
-### Architecture Components
+                                   +----------------------+
+                                   |     Terraform        |
+                                   |  (Infrastructure as  |
+                                   |      Code)           |
+                                   +----------------------+
+                                           |
+                                           v
+                       +-------------------+-------------------+
+                       |    VPC, Subnets, Security Groups,     |
+                       |        IAM Roles and Policies         |
+                       +-------------------+-------------------+
 
-1. **Frontend (React)**:
-   - **React**: A JavaScript library for building user interfaces.
-   - **S3**: AWS Simple Storage Service, used to host the static files for the frontend.
-   - **CloudFront**: AWS Content Delivery Network (CDN), used to deliver the frontend content globally with low latency.
+                                   +----------------------+
+                                   |   GitHub Actions     |
+                                   |   (CI/CD Pipeline)   |
+                                   +----------------------+
+                                           |
+                                           v
+                                   +----------------------+
+                                   |  Build, Test, Deploy |
+                                   +----------------------+
 
-2. **Backend (Node.js with Express)**:
-   - **Node.js**: A JavaScript runtime built on Chrome's V8 JavaScript engine.
-   - **Express**: A web application framework for Node.js, used to build the RESTful API.
-   - **Docker**: Used to containerize the backend application for consistent deployment.
-   - **ECR**: AWS Elastic Container Registry, used to store Docker images.
-   - **ECS**: AWS Elastic Container Service, used to run the Docker containers.
-   - **API Gateway**: AWS API Gateway, used to expose the backend services.
+                                   +----------------------+
+                                   |     TMDB API         |
+                                   |  (External Service)  |
+                                   +----------------------+
+```
 
-3. **Infrastructure (Terraform)**:
-   - **Terraform**: An infrastructure as code tool used to provision and manage the AWS resources.
-   - **IAM**: AWS Identity and Access Management, used to manage access to AWS services and resources.
-   - **VPC, Subnets, Security Groups**: AWS Virtual Private Cloud, used to create a secure network environment.
+### Components and Connections:
 
-4. **CI/CD (GitHub Actions)**:
-   - **GitHub Actions**: Used for Continuous Integration and Continuous Deployment (CI/CD) to automate the build, test, and deployment process.
+1. **Frontend (React)**
+   - **AWS S3**: Hosts the static files for the React frontend.
+   - **AWS CloudFront**: Serves the frontend content globally with low latency.
 
-5. **External API**:
-   - **TMDB API**: The Movie Database API, used to fetch movie data for the application.
+2. **Backend (Node.js with Express)**
+   - **Docker**: Containerizes the backend application.
+   - **AWS ECR (Elastic Container Registry)**: Stores the Docker images.
+   - **AWS ECS (Elastic Container Service)**: Manages and runs the Docker containers.
+   - **API Gateway**: Routes requests to the backend services in ECS.
+   - **Load Balancer**: Distributes traffic among ECS tasks.
+
+3. **Environments**:
+   - **Development Environment**:
+     - **AWS ECS**: Runs the Node.js backend.
+     - **Amazon RDS**: Relational data storage.
+     - **Amazon ElastiCache**: Caches frequently accessed data.
+   - **Staging Environment**:
+     - **AWS ECS**: Runs the Node.js backend.
+     - **Amazon RDS**: Relational data storage.
+     - **Amazon ElastiCache**: Caches frequently accessed data.
+   - **Production Environment**:
+     - **AWS ECS**: Runs the Node.js backend.
+     - **Amazon RDS**: Relational data storage.
+     - **Amazon ElastiCache**: Caches frequently accessed data.
+
+4. **Infrastructure**
+   - **Terraform**: Manages the infrastructure as code.
+   - **Components**:
+     - **VPC**: Virtual Private Cloud for network isolation.
+     - **Subnets**: Public and private subnets for organizing resources.
+     - **Security Groups**: Controls traffic with firewall rules.
+     - **IAM Roles and Policies**: Manages access permissions.
+
+5. **CI/CD (GitHub Actions)**
+   - **Automated Workflows**: For building, testing, and deploying the application.
+   - **Processes**: Runs on every push to any branch, includes deploying to dev, stage, and prod environments.
+
+6. **External API**
+   - **TMDB API**: Provides movie data for the application.
 
 ## Project Structure
 
@@ -71,9 +164,7 @@ netflix-clone/
 │   ├── src/
 │   │   ├── App.js
 │   │   ├── App.test.js
-│   │
-
-   ├── App.css
+│   │   ├── App.css
 │   │   └── ...
 │   ├── public/
 │   ├── Dockerfile
@@ -157,7 +248,9 @@ Set the following environment variables in your GitHub repository secrets and lo
 - `DOCKER_USERNAME`
 - `DOCKER_PASSWORD`
 - `AWS_ACCOUNT_ID`
-- `AWS_REGION` (us-east-1)
+- `AWS_REGION` (us
+
+-east-1)
 - `TMDB_API_KEY`
 
 ### Frontend Setup
