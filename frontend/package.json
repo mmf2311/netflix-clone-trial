@@ -19,14 +19,13 @@
     "@babel/preset-env": "^7.14.5",
     "@testing-library/react": "^11.2.6",
     "@testing-library/jest-dom": "^5.11.10",
-    "@babel/plugin-proposal-private-property-in-object": "^7.16.7",
     "jest-fetch-mock": "^3.0.3"
   },
   "babel": {
     "presets": ["@babel/preset-react", "@babel/preset-env"]
   },
   "jest": {
-    "setupFiles": ["<rootDir>/jest.setup.js"],
+    "setupFilesAfterEnv": ["<rootDir>/src/setupTests.js"],
     "transform": {
       "^.+\\.(js|jsx|mjs|cjs|ts|tsx)$": "react-scripts/config/jest/babelTransform.js",
       "^.+\\.css$": "react-scripts/config/jest/cssTransform.js",
