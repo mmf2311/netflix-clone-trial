@@ -1,37 +1,81 @@
 # netflix-clone-trial
 
-Updated Network Architecture Description
-Frontend
+# Netflix Clone
 
-Users: Access the application via web or mobile devices.
-Content Delivery Network (CDN): AWS CloudFront to distribute content with low latency.
-Static Website Hosting: S3 buckets for hosting static assets like HTML, CSS, and JavaScript.
-Backend Services
+A Netflix clone application built with React for the frontend and Node.js with Express for the backend. It uses various AWS services for deployment and infrastructure management, Docker for containerization, and GitHub Actions for CI/CD.
 
-API Gateway: Acts as the entry point for all client requests.
-Lambda Functions: Stateless computation to handle API requests, process data, and communicate with other services.
-ECS/EKS (Docker Containers/Kubernetes): For running containerized microservices that handle business logic, user management, and content recommendations.
-EC2 Instances: For workloads that require dedicated servers, such as encoding/decoding videos.
-TMDB API: External service providing movie data.
-Databases
+## Table of Contents
 
-RDS (PostgreSQL/MySQL): For relational data like user information and metadata.
-DynamoDB: For NoSQL data storage like user preferences, watch history, and session data.
-ElastiCache (Redis/Memcached): For caching frequently accessed data to improve performance.
-Storage
+- [Netflix Clone](#netflix-clone)
+  - [Table of Contents](#table-of-contents)
+  - [Overview](#overview)
+  - [Architecture](#architecture)
+  - [Project Structure](#project-structure)
+  - [Setup and Installation](#setup-and-installation)
+    - [Prerequisites](#prerequisites)
+    - [Environment Variables](#environment-variables)
+    - [Frontend Setup](#frontend-setup)
+    - [Backend Setup](#backend-setup)
+    - [Docker Setup](#docker-setup)
+    - [Terraform Setup](#terraform-setup)
+  - [Branching Strategy](#branching-strategy)
+  - [CI/CD Pipeline](#cicd-pipeline)
+  - [Destroying the Infrastructure](#destroying-the-infrastructure)
+  - [License](#license)
+  - [Acknowledgements](#acknowledgements)
 
-S3: For storing video content, user-uploaded images, and other static resources.
-EFS (Elastic File System): For file storage that needs to be shared across multiple instances.
-Security
+## Overview
 
-AWS Secrets Manager: For managing sensitive information like API keys and database credentials.
-IAM (Identity and Access Management): For managing user permissions and roles.
-Cognito: For user authentication and authorization.
-Messaging & Notifications
+This project is a full-stack Netflix clone application designed to showcase the use of modern web technologies and cloud infrastructure. The application fetches movie data from the TMDB API and displays it in a Netflix-like interface.
 
-SNS (Simple Notification Service): For sending notifications.
-SQS (Simple Queue Service): For managing task queues and asynchronous processing.
-Monitoring & Logging
+## Architecture
 
-CloudWatch: For monitoring AWS resources and logging.
-ElasticSearch Service & Kibana: For centralized logging and analytics.
+The application is structured as follows:
+
+- **Frontend**: Built with React, served from an S3 bucket.
+- **Backend**: Built with Node.js and Express, running in AWS ECS.
+- **Infrastructure**: Managed with Terraform, deployed in AWS.
+
+## Project Structure
+
+```plaintext
+netflix-clone/
+├── frontend/
+│   ├── src/
+│   │   ├── App.js
+│   │   ├── App.css
+│   │   └── ...
+│   ├── public/
+│   ├── Dockerfile
+│   ├── package.json
+│   ├── package-lock.json
+│   └── ...
+├── backend/
+│   ├── src/
+│   │   ├── index.js
+│   │   ├── movies.js
+│   │   └── ...
+│   ├── Dockerfile
+│   ├── package.json
+│   ├── package-lock.json
+│   └── ...
+├── infrastructure/
+│   ├── dev/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   └── ...
+│   ├── stage/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   └── ...
+│   ├── prod/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   └── ...
+│   └── ...
+├── .github/
+│   └── workflows/
+│       ├── ci-cd.yml
+│       ├── destroy.yml
+│       └── ...
+└── README.md
