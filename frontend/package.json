@@ -15,8 +15,10 @@
     "react-scripts": "4.0.3"
   },
   "devDependencies": {
+    "@babel/preset-react": "^7.14.5",
     "@testing-library/react": "^11.2.6",
-    "@testing-library/jest-dom": "^5.11.10"
+    "@testing-library/jest-dom": "^5.11.10",
+    "jest": "^27.0.6"
   },
   "resolutions": {
     "string-width": "^4.2.3"

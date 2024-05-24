@@ -42,7 +42,9 @@ This project is a full-stack Netflix clone application designed to showcase the 
                                                    |
                                                    v
                                          +---------+-----------+
-                                         |   AWS CloudFront    |
+                                        
+
+ |   AWS CloudFront    |
                                          +---------+-----------+
                                                    |
                                                    v
@@ -214,6 +216,7 @@ netflix-clone/
 - Jest
 - @testing-library/react
 - @testing-library/jest-dom
+- @babel/preset-react
 
 ### Backend
 
@@ -248,9 +251,7 @@ Set the following environment variables in your GitHub repository secrets and lo
 - `DOCKER_USERNAME`
 - `DOCKER_PASSWORD`
 - `AWS_ACCOUNT_ID`
-- `AWS_REGION` (us
-
--east-1)
+- `AWS_REGION` (us-east-1)
 - `TMDB_API_KEY`
 
 ### Frontend Setup
@@ -342,7 +343,9 @@ The branching strategy for this project is as follows:
 
 ## CI/CD Pipeline
 
-The CI/CD pipeline is defined using GitHub Actions and includes the following workflows:
+The CI/CD pipeline is defined using GitHub
+
+ Actions and includes the following workflows:
 
 - **Build and Test**: Runs on every push to any branch
 - **Deploy to Dev**: Runs on push to `dev` branch
@@ -356,6 +359,14 @@ For detailed configuration, see the [GitHub Actions workflow file](.github/workf
 To destroy the infrastructure for each environment, you can use the following GitHub Actions workflow.
 
 For detailed configuration, see the [GitHub Actions destroy workflow file](.github/workflows/destroy.yml).
+
+### Running the Destroy Workflow
+
+1. Go to the Actions tab in your GitHub repository.
+2. Select the "Destroy Infrastructure" workflow.
+3. Click the "Run workflow" button and choose the appropriate environment (dev, stage, or prod) to destroy the infrastructure.
+
+This will trigger the workflow and execute `terraform destroy` for the specified environment, removing all AWS resources created by the CI/CD pipeline.
 
 ## Troubleshooting and Debugging
 
