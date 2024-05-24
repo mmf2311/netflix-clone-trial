@@ -277,10 +277,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [React](https://reactjs.org/)
 - [Node.js](https://nodejs.org/)
 - [AWS](https://aws.amazon.com/)
-- [Docker](https
-
-://www.docker.com/)
+- [Docker](https://www.docker.com/)
 - [Terraform](https://www.terraform.io/)
-```
-
-This `README.md` file now includes detailed documentation on the project's structure, dependencies, setup, and troubleshooting guidelines. It also lists the group members involved in the project. Adjust the content as needed to fit the specifics of your project.
