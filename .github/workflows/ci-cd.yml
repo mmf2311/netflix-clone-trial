@@ -30,7 +30,7 @@ jobs:
       run: |
         cd frontend
         npm install
-        npm test
+        npm test -- --watchAll=false
 
     - name: Install dependencies and run tests (backend)
       run: |

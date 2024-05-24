@@ -1,6 +1,6 @@
 # Netflix Clone
 
-A Netflix clone application built with React for the frontend and Node.js with Express for the backend. It uses various AWS services for deployment and infrastructure management, Docker for containerization, and GitHub Actions for CI/CD.
+A Netflix clone application built with React for the frontend and Node.js with Express for the backend. It uses various AWS services for deployment and infrastructure management, Docker for containerization, and GitHub Actions for CI/CD. The project also includes unit tests for both frontend and backend.
 
 ## Table of Contents
 
@@ -18,6 +18,7 @@ A Netflix clone application built with React for the frontend and Node.js with E
     - [Backend Setup](#backend-setup)
     - [Docker Setup](#docker-setup)
     - [Terraform Setup](#terraform-setup)
+  - [Running Unit Tests](#running-unit-tests)
   - [Branching Strategy](#branching-strategy)
   - [CI/CD Pipeline](#cicd-pipeline)
   - [Destroying the Infrastructure](#destroying-the-infrastructure)
@@ -69,7 +70,10 @@ netflix-clone/
 ├── frontend/
 │   ├── src/
 │   │   ├── App.js
-│   │   ├── App.css
+│   │   ├── App.test.js
+│   │
+
+   ├── App.css
 │   │   └── ...
 │   ├── public/
 │   ├── Dockerfile
@@ -80,6 +84,7 @@ netflix-clone/
 │   ├── src/
 │   │   ├── index.js
 │   │   ├── movies.js
+│   │   ├── movies.test.js
 │   │   └── ...
 │   ├── Dockerfile
 │   ├── package.json
@@ -116,12 +121,15 @@ netflix-clone/
 - Babel
 - Webpack
 - Jest
+- @testing-library/react
+- @testing-library/jest-dom
 
 ### Backend
 
 - Express
 - Axios
 - Jest
+- Supertest
 
 ### Infrastructure
 
@@ -211,6 +219,24 @@ Set the following environment variables in your GitHub repository secrets and lo
    ```sh
    terraform apply -var="docker_image_tag=latest"
    ```
+
+## Running Unit Tests
+
+### Frontend
+
+To run the frontend unit tests, navigate to the `frontend` directory and use the following command:
+
+```sh
+npm test
+```
+
+### Backend
+
+To run the backend unit tests, navigate to the `backend` directory and use the following command:
+
+```sh
+npm test
+```
 
 ## Branching Strategy
 
