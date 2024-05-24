@@ -26,6 +26,9 @@ jobs:
       with:
         node-version: '14'
 
+    - name: Clear npm cache
+      run: npm cache clean --force
+
     - name: Install dependencies and run tests (frontend)
       run: |
         cd frontend
