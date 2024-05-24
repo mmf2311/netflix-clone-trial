@@ -31,6 +31,7 @@ jobs:
 
     - name: Delete node_modules and package-lock.json
       run: |
+        cd frontend
         rm -rf node_modules package-lock.json
 
     - name: Install dependencies and run tests (frontend)
@@ -39,21 +40,11 @@ jobs:
         npm install
         npm test -- --watchAll=false
 
-    - name: Install dependencies and run tests (backend)
-      run: |
-        cd backend
-        npm install
-        npm test
-
     - name: Build and tag Docker images (frontend)
       run: |
-        docker build -t group-3-frontend-netflix-clone:latest ./frontend
+        cd frontend
+        docker build -t group-3-frontend-netflix-clone:latest .
         docker tag group-3-frontend-netflix-clone:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-frontend-netflix-clone:latest
-
-    - name: Build and tag Docker images (backend)
-      run: |
-        docker build -t group-3-backend-netflix-clone:latest ./backend
-        docker tag group-3-backend-netflix-clone:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-backend-netflix-clone:latest
 
     - name: Login to AWS ECR
       id: ecr-login
@@ -62,10 +53,6 @@ jobs:
     - name: Push Docker images to ECR (frontend)
       run: |
         docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-frontend-netflix-clone:latest
-
-    - name: Push Docker images to ECR (backend)
-      run: |
-        docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-backend-netflix-clone:latest
 
   deploy-dev:
     if: github.ref == 'refs/heads/dev'
@@ -85,9 +72,9 @@ jobs:
 
     - name: Deploy to ECS (Dev)
       run: |
-        cd infrastructure/dev
+        cd frontend/infrastructure/dev
         terraform init
-        terraform apply -auto-approve -var="docker_image_tag=latest" -var="docker_image_repo_frontend=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-frontend-netflix-clone" -var="docker_image_repo_backend=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-backend-netflix-clone"
+        terraform apply -auto-approve -var="docker_image_tag=latest" -var="docker_image_repo_frontend=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-frontend-netflix-clone"
 
   deploy-stage:
     if: github.ref == 'refs/heads/stage'
@@ -107,9 +94,9 @@ jobs:
 
     - name: Deploy to ECS (Stage)
       run: |
-        cd infrastructure/stage
+        cd frontend/infrastructure/stage
         terraform init
-        terraform apply -auto-approve -var="docker_image_tag=latest" -var="docker_image_repo_frontend=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-frontend-netflix-clone" -var="docker_image_repo_backend=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-backend-netflix-clone"
+        terraform apply -auto-approve -var="docker_image_tag=latest" -var="docker_image_repo_frontend=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-frontend-netflix-clone"
 
   deploy-prod:
     if: github.ref == 'refs/heads/prod'
@@ -129,6 +116,6 @@ jobs:
 
     - name: Deploy to ECS (Prod)
       run: |
-        cd infrastructure/prod
+        cd frontend/infrastructure/prod
         terraform init
-        terraform apply -auto-approve -var="docker_image_tag=latest" -var="docker_image_repo_frontend=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-frontend-netflix-clone" -var="docker_image_repo_backend=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-backend-netflix-clone"
+        terraform apply -auto-approve -var="docker_image_tag=latest" -var="docker_image_repo_frontend=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-frontend-netflix-clone"
