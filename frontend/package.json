@@ -18,8 +18,7 @@
     "@babel/preset-react": "^7.14.5",
     "@babel/preset-env": "^7.14.5",
     "@testing-library/react": "^11.2.6",
-    "@testing-library/jest-dom": "^5.11.10",
-    "jest": "^27.0.6"
+    "@testing-library/jest-dom": "^5.11.10"
   },
   "babel": {
     "presets": ["@babel/preset-react", "@babel/preset-env"]
