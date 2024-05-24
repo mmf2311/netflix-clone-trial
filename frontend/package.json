@@ -39,8 +39,7 @@
       "^react-native$": "react-native-web",
       "^.+\\.module\\.(css|sass|scss)$": "identity-obj-proxy"
     },
-    "resetMocks": true,
-    "setupFilesAfterEnv": ["<rootDir>/src/setupTests.js"]
+    "resetMocks": true
   },
   "author": "Your Name",
   "license": "ISC"
