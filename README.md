@@ -1,14 +1,3 @@
-Certainly! Here are some recommendations for enhancing the `README.md` file to include comprehensive documentation as per the requirement. I will amend the `README.md` to include:
-
-1. Project structure and dependencies.
-2. Detailed steps to set up the development environment.
-3. Diagrams and screenshots to illustrate the architecture and workflow.
-4. Guidelines for troubleshooting and debugging.
-5. Group members' names.
-
-### Amended `README.md`
-
-```markdown
 # Netflix Clone
 
 A Netflix clone application built with React for the frontend and Node.js with Express for the backend. It uses various AWS services for deployment and infrastructure management, Docker for containerization, and GitHub Actions for CI/CD.
