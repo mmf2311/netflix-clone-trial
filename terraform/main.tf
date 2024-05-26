@@ -2,10 +2,14 @@ provider "aws" {
   region = var.aws_region
 }
 
+locals {
+  timestamp = formatdate("YYYYMMDD-HHMMSS", timestamp())
+}
+
 resource "aws_vpc" "vpc" {
   cidr_block = "10.0.0.0/16"
   tags = {
-    Name = "group-3-vpc-netflix-clone-${var.branch_name}-${timestamp()}"
+    Name = "group-3-vpc-netflix-clone-${var.branch_name}-${local.timestamp}"
   }
 }
 
@@ -14,12 +18,12 @@ resource "aws_subnet" "subnet" {
   cidr_block = "10.0.1.0/24"
   availability_zone = "us-east-1a"
   tags = {
-    Name = "group-3-subnet-netflix-clone-${var.branch_name}-${timestamp()}"
+    Name = "group-3-subnet-netflix-clone-${var.branch_name}-${local.timestamp}"
   }
 }
 
 resource "aws_eks_cluster" "eks_cluster" {
-  name     = "group-3-eks-netflix-clone-${var.branch_name}-${timestamp()}"
+  name     = "group-3-eks-netflix-clone-${var.branch_name}-${local.timestamp}"
   role_arn = aws_iam_role.eks_cluster_role.arn
 
   vpc_config {
@@ -33,7 +37,7 @@ resource "aws_eks_cluster" "eks_cluster" {
 }
 
 resource "aws_iam_role" "eks_cluster_role" {
-  name = "group-3-eks-cluster-role-${var.branch_name}-${timestamp()}"
+  name = "group-3-eks-cluster-role-${var.branch_name}-${local.timestamp}"
   assume_role_policy = data.aws_iam_policy_document.eks_cluster_assume_role_policy.json
 }
 
@@ -67,7 +71,7 @@ output "kubeconfig" {
 }
 
 resource "aws_iam_role" "ecs_task_execution_role" {
-  name = "group-3-ecsTaskExecutionRole-${var.branch_name}-${timestamp()}"
+  name = "group-3-ecsTaskExecutionRole-${var.branch_name}-${local.timestamp}"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -82,13 +86,13 @@ resource "aws_iam_role" "ecs_task_execution_role" {
   })
 }
 
-resource "aws_iam_policy_attachment" "ecs_task_execution_policy" {
+resource "aws_iam_role_policy_attachment" "ecs_task_execution_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
   role       = aws_iam_role.ecs_task_execution_role.name
 }
 
 resource "aws_ecr_repository" "netflix_clone" {
-  name = "group-3-ecr-netflix-clone-${var.branch_name}-${timestamp()}"
+  name = "group-3-ecr-netflix-clone-${var.branch_name}-${local.timestamp}"
 }
 
 output "ecr_repository_url" {
@@ -96,11 +100,11 @@ output "ecr_repository_url" {
 }
 
 resource "aws_ecs_cluster" "netflix_clone_cluster" {
-  name = "group-3-ecs-cluster-netflix-clone-${var.branch_name}-${timestamp()}"
+  name = "group-3-ecs-cluster-netflix-clone-${var.branch_name}-${local.timestamp}"
 }
 
 resource "aws_ecs_task_definition" "netflix_clone_task" {
-  family                   = "group-3-ecs-task-netflix-clone-${var.branch_name}-${timestamp()}"
+  family                   = "group-3-ecs-task-netflix-clone-${var.branch_name}-${local.timestamp}"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = "256"
@@ -123,7 +127,7 @@ resource "aws_ecs_task_definition" "netflix_clone_task" {
 }
 
 resource "aws_ecs_service" "netflix_clone_service" {
-  name            = "group-3-ecs-service-netflix-clone-${var.branch_name}-${timestamp()}"
+  name            = "group-3-ecs-service-netflix-clone-${var.branch_name}-${local.timestamp}"
   cluster         = aws_ecs_cluster.netflix_clone_cluster.id
   task_definition = aws_ecs_task_definition.netflix_clone_task.arn
   desired_count   = 1
