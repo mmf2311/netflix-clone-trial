@@ -56,7 +56,7 @@ data "aws_iam_role" "existing_ecs_task_execution_role" {
 
 # IAM Role and Policy for ECS Task Execution
 resource "aws_iam_role" "ecs_task_execution_role" {
-  count = data.aws_iam_role.existing_ecs_task_execution_role.arn == "" ? 1 : 0
+  count = length(data.aws_iam_role.existing_ecs_task_execution_role.arn) == 0 ? 1 : 0
 
   name = "group-3-ecsTaskExecutionRole"
 
@@ -79,7 +79,7 @@ resource "aws_iam_policy_attachment" "ecs_task_execution_policy" {
 
   name       = "ecs-task-execution-policy-attachment"
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-  roles      = [aws_iam_role.ecs_task_execution_role.name]
+  roles      = aws_iam_role.ecs_task_execution_role.count > 0 ? [aws_iam_role.ecs_task_execution_role[0].name] : [data.aws_iam_role.existing_ecs_task_execution_role.name]
 }
 
 # Check for existing ECR repository
@@ -88,7 +88,7 @@ data "aws_ecr_repository" "existing_netflix_clone" {
 }
 
 resource "aws_ecr_repository" "netflix_clone" {
-  count = data.aws_ecr_repository.existing_netflix_clone.repository_uri == "" ? 1 : 0
+  count = length(data.aws_ecr_repository.existing_netflix_clone.repository_url) == 0 ? 1 : 0
 
   name                 = "group-3-ecr-netflix-clone"
   image_tag_mutability = "MUTABLE"
@@ -104,11 +104,11 @@ resource "aws_ecs_task_definition" "netflix_clone_task" {
   requires_compatibilities = ["FARGATE"]
   cpu                      = "256"
   memory                   = "512"
-  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+  execution_role_arn       = aws_iam_role.ecs_task_execution_role.count > 0 ? aws_iam_role.ecs_task_execution_role[0].arn : data.aws_iam_role.existing_ecs_task_execution_role.arn
 
   container_definitions = jsonencode([{
     name  = "netflix-clone"
-    image = "${data.aws_ecr_repository.existing_netflix_clone.repository_uri}:latest"
+    image = "${data.aws_ecr_repository.existing_netflix_clone.repository_url}:latest"
     essential = true
 
     portMappings = [{
@@ -135,3 +135,4 @@ resource "aws_ecs_service" "netflix_clone_service" {
     assign_public_ip = true
   }
 }
+
