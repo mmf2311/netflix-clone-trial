@@ -1,11 +1,12 @@
 name: Destroy AWS Resources
 
 on:
-  push:
-    branches:
-      - dev
-      - stage
-      - prod
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to destroy resources for'
+        required: true
+        default: 'dev'
 
 jobs:
   destroy:
@@ -31,7 +32,7 @@ jobs:
       run: |
         cd terraform
         terraform init
-        terraform destroy -auto-approve -var branch_name=${{ github.ref_name }}
+        terraform destroy -auto-approve -var branch_name=${{ github.event.inputs.branch }}
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
