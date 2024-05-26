@@ -2,8 +2,15 @@ provider "aws" {
   region = var.aws_region
 }
 
-resource "aws_ecr_repository" "netflix_clone" {
+data "aws_ecr_repository" "existing" {
   name = "group-3-ecr-netflix-clone"
+}
+
+resource "aws_ecr_repository" "netflix_clone" {
+  count = length(data.aws_ecr_repository.existing.id) == 0 ? 1 : 0
+
+  name = "group-3-ecr-netflix-clone"
+  image_tag_mutability = "MUTABLE"
 }
 
 resource "aws_ecs_cluster" "netflix_clone_cluster" {
@@ -19,7 +26,7 @@ resource "aws_ecs_task_definition" "netflix_clone_task" {
 
   container_definitions = jsonencode([{
     name  = "netflix-clone"
-    image = "${aws_ecr_repository.netflix_clone.repository_url}:latest"
+    image = "${data.aws_ecr_repository.existing.repository_url}:latest"
     essential = true
 
     portMappings = [{
@@ -45,4 +52,8 @@ resource "aws_ecs_service" "netflix_clone_service" {
     subnets         = ["subnet-0123456789abcdef0"]
     assign_public_ip = true
   }
+}
+
+output "ecr_repository_url" {
+  value = data.aws_ecr_repository.existing.repository_url
 }
