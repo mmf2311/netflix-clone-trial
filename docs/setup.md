@@ -41,3 +41,15 @@
 6. **Deploy to Kubernetes**:
    ```bash
    kubectl apply -f ./kubernetes
+   ```
+
+## Environment Variables
+- `AWS_REGION`: The AWS region to deploy to.
+- `TMDB_API_KEY`: Your TMDB API key for movie data.
+
+## GitHub Secrets
+Ensure the following secrets are added to your GitHub repository:
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_REGION`
+- `TMDB_API_KEY`

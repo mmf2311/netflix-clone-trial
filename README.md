@@ -1,4 +1,4 @@
-Certainly! Below is the complete code and documentation for your project, including the necessary updates for handling secrets and environment variables, as well as the new user experience document.
+Sure, here is the complete code and documentation with the updated GitHub Actions workflow:
 
 ### GitHub Repository Structure
 ```plaintext
@@ -224,12 +224,11 @@ jobs:
       uses: docker/setup-buildx-action@v1
 
     - name: Log in to Amazon ECR
-      id: ecr_login
       uses: aws-actions/amazon-ecr-login@v1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ secrets.AWS_REGION }}
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_REGION: ${{ secrets.AWS_REGION }}
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v2
@@ -303,10 +302,10 @@ The architecture consists of the following components:
 - **SNS**: AWS Simple Notification Service (SNS) is used to send notifications and messages to users or other systems.
 - **TMDB API**: An external API used to fetch movie data, including details, search results, and other relevant information. It is integrated into the backend application using the `utils.py` module.
 - **Docker**: Docker is used to containerize the application, ensuring portability and consistency across different environments.
-- **ECR**
+- **ECR**: AWS Elastic Container Registry (ECR) is used to store and manage Docker images.
+- **ECS**
 
-: AWS Elastic Container Registry (ECR) is used to store and manage Docker images.
-- **ECS**: AWS Elastic Container Service (ECS) is used to run containerized applications. It works with EC2 to provide scalable compute capacity.
+: AWS Elastic Container Service (ECS) is used to run containerized applications. It works with EC2 to provide scalable compute capacity.
 - **EC2**: AWS EC2 instances provide the underlying compute capacity for running the ECS cluster and other resources.
 - **Kubernetes**: Kubernetes is used for container orchestration, managing the deployment, scaling, and operations of containerized applications.
 - **Terraform**: Terraform is used for managing infrastructure as code, automating the setup and configuration of all the necessary AWS resources.
@@ -587,11 +586,11 @@ The objective of this project is to create a Netflix clone application that auto
 
 ## User Experience
 
-For a detailed overview
+For a detailed overview of the user experience, refer to the [User Experience Overview](docs/user_experience.md) document.
 
- of the user experience, refer to the [User Experience Overview](docs/user_experience.md) document.
+## Project
 
-## Project Structure
+ Structure
 
 - `.github/workflows`: GitHub Actions workflows for CI/CD and destroying infrastructure
   - `ci-cd.yml`: CI/CD pipeline workflow
@@ -835,11 +834,11 @@ The architecture consists of the following components:
 
 ## Documentation
 
-Detailed documentation is available in the
-
- `docs` directory:
+Detailed documentation is available in the `docs` directory:
 - [Network Architecture](docs/architecture.md)
-- [Setup Instructions](docs/setup.md)
+- [Setup Instructions](docs/setup.md
+
+)
 - [User Experience Overview](docs/user_experience.md)
 
 ## Contributing
@@ -855,5 +854,3 @@ This project is licensed under the MIT License.
 ```
 
 This README file and code structure include all the necessary details, including a detailed network architecture diagram, explanations, full code for each file, and a new user experience overview document. If there are any further adjustments or additional details needed, please let me know!
-
-test
