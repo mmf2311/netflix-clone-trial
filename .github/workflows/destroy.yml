@@ -25,11 +25,21 @@ jobs:
 
     - name: Destroy EKS Cluster
       run: |
-        aws eks delete-cluster --name group-3-eks-netflix-clone-${{ github.event.inputs.branch }}
+        CLUSTER_NAME="group-3-eks-netflix-clone-${{ github.event.inputs.branch }}"
+        if aws eks describe-cluster --name $CLUSTER_NAME &>/dev/null; then
+          aws eks delete-cluster --name $CLUSTER_NAME
+        else
+          echo "EKS Cluster $CLUSTER_NAME does not exist. Skipping deletion."
+        fi
 
     - name: Delete ECR Repository
       run: |
-        aws ecr describe-repositories --query "repositories[?repositoryName=='group-3-ecr-netflix-clone-${{ github.event.inputs.branch }}-*'].repositoryName" --output text | xargs -I {} aws ecr delete-repository --repository-name {} --force
+        REPO_NAME="group-3-ecr-netflix-clone-${{ github.event.inputs.branch }}-*"
+        if aws ecr describe-repositories --repository-names $REPO_NAME &>/dev/null; then
+          aws ecr describe-repositories --query "repositories[?repositoryName=='$REPO_NAME'].repositoryName" --output text | xargs -I {} aws ecr delete-repository --repository-name {} --force
+        else
+          echo "ECR Repository $REPO_NAME does not exist. Skipping deletion."
+        fi
 
     - name: Destroy Terraform Resources
       run: |
@@ -46,35 +56,56 @@ jobs:
     - name: Delete VPCs
       run: |
         VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=group-3-vpc-netflix-clone-${{ github.event.inputs.branch }}-*" --query "Vpcs[].VpcId" --output text)
-        for VPC_ID in $VPC_IDS; do
-          echo "Deleting VPC: $VPC_ID"
-          aws ec2 delete-vpc --vpc-id $VPC_ID
-        done
+        if [ -z "$VPC_IDS" ]; then
+          echo "No VPCs found for deletion. Skipping."
+        else
+          for VPC_ID in $VPC_IDS; do
+            echo "Deleting VPC: $VPC_ID"
+            aws ec2 delete-vpc --vpc-id $VPC_ID
+          done
+        fi
 
     - name: Delete Subnets
       run: |
         SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=group-3-subnet-netflix-clone-${{ github.event.inputs.branch }}-*" --query "Subnets[].SubnetId" --output text)
-        for SUBNET_ID in $SUBNET_IDS; do
-          echo "Deleting Subnet: $SUBNET_ID"
-          aws ec2 delete-subnet --subnet-id $SUBNET_ID
-        done
+        if [ -z "$SUBNET_IDS" ]; then
+          echo "No Subnets found for deletion. Skipping."
+        else
+          for SUBNET_ID in $SUBNET_IDS; do
+            echo "Deleting Subnet: $SUBNET_ID"
+            aws ec2 delete-subnet --subnet-id $SUBNET_ID
+          done
+        fi
 
     - name: Delete Internet Gateways
       run: |
         IGW_IDS=$(aws ec2 describe-internet-gateways --filters "Name=tag:Name,Values=group-3-igw-netflix-clone-${{ github.event.inputs.branch }}-*" --query "InternetGateways[].InternetGatewayId" --output text)
-        for IGW_ID in $IGW_IDS; do
-          echo "Deleting Internet Gateway: $IGW_ID"
-          aws ec2 delete-internet-gateway --internet-gateway-id $IGW_ID
-        done
+        if [ -z "$IGW_IDS" ]; then
+          echo "No Internet Gateways found for deletion. Skipping."
+        else
+          for IGW_ID in $IGW_IDS; do
+            echo "Deleting Internet Gateway: $IGW_ID"
+            aws ec2 delete-internet-gateway --internet-gateway-id $IGW_ID
+          done
+        fi
 
     - name: Delete ECS Cluster
       run: |
-        aws ecs delete-cluster --cluster group-3-ecs-cluster-netflix-clone-${{ github.event.inputs.branch }}
+        CLUSTER_NAME="group-3-ecs-cluster-netflix-clone-${{ github.event.inputs.branch }}"
+        if aws ecs describe-clusters --clusters $CLUSTER_NAME --query "clusters[0].clusterArn" --output text &>/dev/null; then
+          aws ecs delete-cluster --cluster $CLUSTER_NAME
+        else
+          echo "ECS Cluster $CLUSTER_NAME does not exist. Skipping deletion."
+        fi
 
     - name: Delete ECS Task Definitions
       run: |
         TASK_DEFINITIONS=$(aws ecs list-task-definitions --query "taskDefinitionArns[?contains(@, 'group-3-ecs-task-netflix-clone-${{ github.event.inputs.branch }}')]" --output text)
-        for TASK_DEFINITION in $TASK_DEFINITIONS; do
-          echo "Deregistering Task Definition: $TASK_DEFINITION"
-          aws ecs deregister-task-definition --task-definition $TASK_DEFINITION
-        done
+        if [ -z "$TASK_DEFINITIONS" ]; then
+          echo "No ECS Task Definitions found for deletion. Skipping."
+        else
+          for TASK_DEFINITION in $TASK_DEFINITIONS; do
+            echo "Deregistering Task Definition: $TASK_DEFINITION"
+            aws ecs deregister-task-definition --task-definition $TASK_DEFINITION
+          done
+        fi
