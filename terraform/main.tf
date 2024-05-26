@@ -62,14 +62,6 @@ data "aws_iam_policy_document" "eks_cluster_assume_role_policy" {
   }
 }
 
-output "cluster_name" {
-  value = aws_eks_cluster.eks_cluster.name
-}
-
-output "kubeconfig" {
-  value = aws_eks_cluster.eks_cluster.endpoint
-}
-
 resource "aws_iam_role" "ecs_task_execution_role" {
   name = "group-3-ecsTaskExecutionRole-${var.branch_name}-${local.timestamp}"
   assume_role_policy = jsonencode({
@@ -93,10 +85,6 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution_policy" {
 
 resource "aws_ecr_repository" "netflix_clone" {
   name = "group-3-ecr-netflix-clone-${var.branch_name}-${local.timestamp}"
-}
-
-output "ecr_repository_url" {
-  value = aws_ecr_repository.netflix_clone.repository_url
 }
 
 resource "aws_ecs_cluster" "netflix_clone_cluster" {

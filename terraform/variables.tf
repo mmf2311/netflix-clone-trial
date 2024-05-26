@@ -1,18 +1,15 @@
 variable "aws_region" {
   description = "The AWS region to deploy to"
-  default     = "us-east-1"
-}
-
-variable "tmdb_api_key" {
-  description = "Your TMDB API key"
-}
-
-variable "timestamp" {
-  description = "Timestamp for unique naming"
-  default     = formatdate("YYYYMMDD-HHMMSS", timestamp())
+  type        = string
+  default     = "us-east-1"  # or any default region you prefer
 }
 
 variable "branch_name" {
-  description = "The branch name for identifying the environment"
+  description = "The branch name"
+  type        = string
+}
+
+variable "tmdb_api_key" {
+  description = "TMDB API key"
   type        = string
 }
