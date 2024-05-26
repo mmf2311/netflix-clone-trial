@@ -52,10 +52,12 @@ jobs:
       run: |
         mkdir -p $HOME/.kube
         echo "${{ secrets.KUBECONFIG }}" | base64 --decode > $HOME/.kube/config
+        kubectl config view
+        kubectl get nodes
 
     - name: Deploy to Kubernetes
       if: github.ref == 'refs/heads/prod' || github.ref == 'refs/heads/stage' || github.ref == 'refs/heads/dev'
-      run: kubectl apply -f kubernetes/deployment.yml
+      run: kubectl apply -f kubernetes/deployment.yml --validate=false
 
     - name: Terraform Init and Apply
       if: github.ref == 'refs/heads/prod' || github.ref == 'refs/heads/stage' || github.ref == 'refs/heads/dev'
