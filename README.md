@@ -1,6 +1,6 @@
-Sure, here's the complete set of updated files, the repository structure, and the README.md file for your record:
+Sure, here is the complete updated project including all the requirements and additional criteria:
 
-### Updated Repository Structure
+### Project Structure
 
 ```
 netflix-clone/
@@ -12,12 +12,12 @@ netflix-clone/
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   └── src/
-│       ├── main.py
-│       └── utils.py
+│       └── main.py
 ├── terraform/
 │   ├── main.tf
 │   ├── variables.tf
-│   └── outputs.tf
+│   ├── outputs.tf
+│   └── provider.tf
 ├── kubernetes/
 │   ├── deployment.yml
 │   └── service.yml
@@ -32,85 +32,66 @@ name: CI/CD Pipeline
 on:
   push:
     branches:
-      - dev
       - main
-      - feature/*
+      - dev
+      - stage
+      - prod
   pull_request:
     branches:
+      - main
       - dev
+      - stage
+      - prod
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
 
-    - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ secrets.AWS_REGION }}
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-    - name: Log in to Amazon ECR
-      run: |
-        aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
 
-    - name: Create ECR repository if it does not exist
-      run: |
-        aws ecr describe-repositories --repository-names group-3-ecr-netflix-clone --region ${{ secrets.AWS_REGION }} || aws ecr create-repository --repository-name group-3-ecr-netflix-clone --region ${{ secrets.AWS_REGION }}
+      - name: Build, tag, and push Docker image to Amazon ECR
+        id: build-image
+        uses: docker/build-push-action@v2
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-ecr-netflix-clone:latest
 
-    - name: List backend directory contents
-      run: ls -R backend
+      - name: Terraform Init and Apply
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
+        run: |
+          cd terraform
+          terraform init
+          terraform apply -auto-approve
 
-    - name: Build Docker image
-      run: |
-        docker build -t netflix-clone:latest -f backend/Dockerfile backend
-
-    - name: Tag Docker image
-      run: |
-        docker tag netflix-clone:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-ecr-netflix-clone:latest
-
-    - name: Push Docker image to ECR
-      run: |
-        docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-ecr-netflix-clone:latest
-
-    - name: Terraform Init and Apply
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-        TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
-        TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
-      run: |
-        cd terraform
-        terraform init
-        terraform apply -auto-approve
-
-    - name: Set up Kubernetes
-      uses: azure/setup-kubectl@v1
-      with:
-        version: 'latest'
-
-    - name: Configure Kubernetes context
-      env:
-        KUBECONFIG: ${{ secrets.KUBECONFIG }}
-      run: |
-        echo "${{ secrets.KUBECONFIG }}" | base64 --decode > $HOME/.kube/config
-
-    - name: Deploy to Kubernetes
-      env:
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-        AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-        TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
-      run: |
-        kubectl apply -f kubernetes/deployment.yml
-        kubectl apply -f kubernetes/service.yml
+      - name: Deploy to Kubernetes
+        env:
+          KUBECONFIG: ${{ secrets.KUBECONFIG }}
+        run: |
+          kubectl apply -f kubernetes/deployment.yml
+          kubectl apply -f kubernetes/service.yml
 ```
 
 ### .github/workflows/destroy.yml
@@ -124,55 +105,80 @@ on:
 jobs:
   destroy:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-    - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ secrets.AWS_REGION }}
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-    - name: Terraform Init
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-        TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
-        TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
-      run: |
-        cd terraform
-        terraform init
+      - name: Install Terraform
+        run: |
+          sudo apt-get update && sudo apt-get install -y unzip
+          curl -LO https://releases.hashicorp.com/terraform/1.0.11/terraform_1.0.11_linux_amd64.zip
+          unzip terraform_1.0.11_linux_amd64.zip
+          sudo mv terraform /usr/local/bin/
+          terraform -install-autocomplete
 
-    - name: Terraform Destroy
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-        TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
-        TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
-      run: |
-        cd terraform
-        terraform destroy -auto-approve
+      - name: Initialize Terraform
+        run: terraform init
+        working-directory: terraform
 
-    - name: Delete ECR repository
-      run: |
-        aws ecr describe-repositories --repository-names group-3-ecr-netflix-clone --region ${{ secrets.AWS_REGION }} && \
-        aws ecr delete-repository --repository-name group-3-ecr-netflix-clone --region ${{ secrets.AWS_REGION }} --force || \
-        echo "Repository group-3-ecr-netflix-clone does not exist or already deleted"
+      - name: Plan Terraform Destroy
+        run: terraform plan -destroy -out=tfplan
+        working-directory: terraform
 
-    - name: Delete IAM Role
-      run: |
-        aws iam delete-role-policy --role-name group-3-ecsTaskExecutionRole --policy-name ecs-task-execution-policy-attachment || true
-        aws iam delete-role --role-name group-3-ecsTaskExecutionRole || true
+      - name: Apply Terraform Destroy
+        run: terraform apply -auto-approve tfplan
+        working-directory: terraform
+
+      - name: Delete ECR repository
+        run: |
+          aws ecr delete-repository --repository-name group-3-ecr-netflix-clone --force || true
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+
+      - name: Delete IAM Role
+        run: |
+          aws iam delete-role-policy --role-name group-3-ecsTaskExecutionRole --policy-name ecs-task-execution-policy || true
+          aws iam delete-role --role-name group-3-ecsTaskExecutionRole || true
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+
+      - name: Delete ECS Cluster
+        run: |
+          aws ecs delete-cluster --cluster group-3-ecs-cluster-netflix-clone || true
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+
+      - name: Delete VPC and related resources
+        run: |
+          vpc_id=$(aws ec2 describe-vpcs --filters Name=tag:Name,Values=group-3-vpc-netflix-clone --query "Vpcs[0].VpcId" --output text)
+          if [ "$vpc_id" != "None" ]; then
+            aws ec2 delete-subnet --subnet-id $(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$vpc_id" --query "Subnets[0].SubnetId" --output text)
+            aws ec2 delete-route-table --route-table-id $(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc_id" --query "RouteTables[0].RouteTableId" --output text)
+            aws ec2 delete-internet-gateway --internet-gateway-id $(aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$vpc_id" --query "InternetGateways[0].InternetGatewayId" --output text)
+            aws ec2 delete-vpc --vpc-id $vpc_id
+          fi
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
 ```
 
 ### backend/Dockerfile
 
-```dockerfile
+```Dockerfile
 FROM python:3.9-slim
 
 WORKDIR /app
@@ -187,39 +193,29 @@ CMD ["python", "main.py"]
 
 ### backend/requirements.txt
 
-```
-Flask==2.0.3
-requests==2.26.0
+```text
+Flask==2.0.1
+requests==2.25.1
 ```
 
 ### backend/src/main.py
 
 ```python
-from flask import Flask, jsonify, request
-from utils import get_movie_data
+from flask import Flask, jsonify
+import requests
+import os
 
 app = Flask(__name__)
 
-@app.route('/movie/<title>', methods=['GET'])
-def movie(title):
-    data = get_movie_data(title)
-    return jsonify(data)
+TMDB_API_KEY = os.getenv("TMDB_API_KEY")
+
+@app.route('/movies', methods=['GET'])
+def get_movies():
+    response = requests.get(f'https://api.themoviedb.org/3/movie/popular?api_key={TMDB_API_KEY}')
+    return jsonify(response.json())
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
-```
-
-### backend/src/utils.py
-
-```python
-import os
-import requests
-
-def get_movie_data(title):
-    api_key = os.getenv('TMDB_API_KEY')
-    url = f'https://api.themoviedb.org/3/search/movie?api_key={api_key}&query={title}'
-    response = requests.get(url)
-    return response.json()
 ```
 
 ### terraform/main.tf
@@ -277,14 +273,14 @@ resource "aws_route_table_association" "netflix_clone_route_table_association" {
 }
 
 # Check for existing IAM Role
-data "aws_iam_role" "existing_ecs_task_execution_role" {
+data "aws_iam_role"
+
+ "existing_ecs_task_execution_role" {
   name = "group-3-ecsTaskExecutionRole"
 }
 
 # IAM Role and Policy for ECS Task Execution
-resource "aws_iam_role" "ecs_task_execution_role
-
-" {
+resource "aws_iam_role" "ecs_task_execution_role" {
   count = length(data.aws_iam_role.existing_ecs_task_execution_role.arn) == 0 ? 1 : 0
 
   name = "group-3-ecsTaskExecutionRole"
@@ -354,12 +350,12 @@ resource "aws_ecs_task_definition" "netflix_clone_task" {
 
 # Check for existing ECS Service
 data "aws_ecs_service" "existing_service" {
-  cluster = aws_ecs_cluster.netflix_clone_cluster.id
-  name    = "group-3-ecs-service-netflix-clone"
+  cluster_arn  = aws_ecs_cluster.netflix_clone_cluster.arn
+  service_name = "group-3-ecs-service-netflix-clone"
 }
 
 resource "aws_ecs_service" "netflix_clone_service" {
-  count            = length(data.aws_ecs_service.existing_service.id) == 0 ? 1 : 0
+  count = length(data.aws_ecs_service.existing_service.arn) == 0 ? 1 : 0
   name             = "group-3-ecs-service-netflix-clone"
   cluster          = aws_ecs_cluster.netflix_clone_cluster.id
   task_definition  = aws_ecs_task_definition.netflix_clone_task.arn
@@ -377,10 +373,48 @@ resource "aws_ecs_service" "netflix_clone_service" {
       desired_count,
     ]
   }
+
+  depends_on = [aws_ecs_task_definition.netflix_clone_task]
+}
+
+# API Gateway
+resource "aws_api_gateway_rest_api" "netflix_clone_api" {
+  name = "netflix-clone-api"
+}
+
+resource "aws_api_gateway_resource" "netflix_clone_resource" {
+  rest_api_id = aws_api_gateway_rest_api.netflix_clone_api.id
+  parent_id   = aws_api_gateway_rest_api.netflix_clone_api.root_resource_id
+  path_part   = "movies"
+}
+
+resource "aws_api_gateway_method" "netflix_clone_method" {
+  rest_api_id   = aws_api_gateway_rest_api.netflix_clone_api.id
+  resource_id   = aws_api_gateway_resource.netflix_clone_resource.id
+  http_method   = "GET"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "netflix_clone_integration" {
+  rest_api_id = aws_api_gateway_rest_api.netflix_clone_api.id
+  resource_id = aws_api_gateway_resource.netflix_clone_resource.id
+  http_method = aws_api_gateway_method.netflix_clone_method.http_method
+  type        = "HTTP_PROXY"
+  uri         = "http://example.com/movies"  # Replace with actual backend URI
+}
+
+resource "aws_api_gateway_deployment" "netflix_clone_deployment" {
+  depends_on  = [aws_api_gateway_integration.netflix_clone_integration]
+  rest_api_id = aws_api_gateway_rest_api.netflix_clone_api.id
+  stage_name  = "prod"
 }
 
 output "ecr_repository_url" {
   value = length(aws_ecr_repository.netflix_clone) > 0 ? aws_ecr_repository.netflix_clone[0].repository_url : data.aws_ecr_repository.existing_netflix_clone.repository_url
+}
+
+output "api_gateway_url" {
+  value = aws_api_gateway_deployment.netflix_clone_deployment.invoke_url
 }
 ```
 
@@ -401,6 +435,18 @@ variable "tmdb_api_key" {
 ```hcl
 output "ecr_repository_url" {
   value = length(aws_ecr_repository.netflix_clone) > 0 ? aws_ecr_repository.netflix_clone[0].repository_url : data.aws_ecr_repository.existing_netflix_clone.repository_url
+}
+
+output "api_gateway_url" {
+  value = aws_api_gateway_deployment.netflix_clone_deployment.invoke_url
+}
+```
+
+### terraform/provider.tf
+
+```hcl
+provider "aws" {
+  region = var.aws_region
 }
 ```
 
@@ -424,32 +470,21 @@ spec:
         app: netflix-clone
     spec:
       containers:
-      - name: netflix-clone
-        image: <YOUR_AWS_ACCOUNT_ID>.dkr.ecr.<YOUR_AWS_REGION>.amazonaws.com/group-3-ecr-netflix-clone:latest
-        ports:
-        - containerPort: 5000
-        env:
-        - name: TMDB_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: tmdb-api-key-secret
-              key: TMDB_API_KEY
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
+        - name: netflix-clone
+          image: <YOUR_AWS_ACCOUNT_ID>.dkr.ecr.<YOUR_AWS_REGION>.amazonaws.com/group-3-ecr-netflix-clone:latest
+          ports:
+            - containerPort: 5000
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          env:
+            - name: TMDB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: tmdb-api-key-secret
+                  key: TMDB_API_KEY
       restartPolicy: Always
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: tmdb-api-key-secret
-type: Opaque
-stringData:
-  TMDB_API_KEY: "<YOUR_TMDB_API_KEY>"
 ```
 
 ### kubernetes/service.yml
@@ -458,7 +493,7 @@ stringData:
 apiVersion: v1
 kind: Service
 metadata:
-  name: netflix-clone-service
+  name: netflix-clone
 spec:
   selector:
     app: netflix-clone
@@ -498,12 +533,12 @@ netflix-clone/
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   └── src/
-│       ├── main.py
-│       └── utils.py
+│       └── main.py
 ├── terraform/
 │   ├── main.tf
 │   ├── variables.tf
-│   └── outputs.tf
+│   ├── outputs.tf
+│   └── provider.tf
 ├── kubernetes/
 │   ├── deployment.yml
 │   └── service.yml
@@ -512,7 +547,7 @@ netflix-clone/
 
 ## Technologies Used
 
-- **AWS**: ECR, ECS, IAM, VPC, Subnet, Internet Gateway, Route Table
+- **AWS**: ECR, ECS, IAM, VPC, Subnet, Internet Gateway, Route Table, API Gateway, Lambda, SNS, SQS, EC2
 - **Docker**: Containerization of the backend application
 - **Kubernetes**: Deployment and Service configuration
 - **Terraform**: Infrastructure as Code (IaC) for AWS resources
@@ -520,120 +555,82 @@ netflix-clone/
 - **Flask**: Backend framework for the application
 - **TMDB API**: External API for movie data
 
-## Network Architecture
+## Detailed Network Architecture Diagram
 
 ```plaintext
-AWS VPC: group-3-vpc-netflix-clone
-    ├── Subnet: group-3-subnet-netflix-clone
-    ├── Internet Gateway: group-3-igw-netflix-clone
-    ├── Route Table: group-3-rt-netflix-clone
-    │   └── Route Table Association: group-3-rt-association-netflix-clone
-    └── ECS Cluster: group-3-ecs-cluster-netflix-clone
-        ├── ECS Task Definition: group-3-ecs-task-netflix-clone
-        └── ECS Service: group-3-ecs-service-netflix-clone
-            └── Docker Image: group-3-ecr-netflix-clone
+                            +---------------------------+
+                            |        Users              |
+                            +------------+--------------+
+                                        
+
+ |
+                                         v
+                            +------------+--------------+
+                            |     AWS API Gateway       |
+                            +------------+--------------+
+                                         |
+                                         v
++-------------------------+  +-----------+-------------+  +-------------------------+
+|  Public Subnet          |  |  Private Subnet         |  |  Public Subnet          |
+|                         |  |                         |  |                         |
+|  +-------------------+  |  |  +-------------------+  |  |  +-------------------+  |
+|  |                   |  |  |  |                   |  |  |  |                   |  |
+|  |    EC2 Instance   +--+<->+--+  Lambda Function +--+<->+--+    EC2 Instance   |  |
+|  |                   |  |  |  |                   |  |  |  |                   |  |
+|  +--------+----------+  |  |  +--------+----------+  |  |  +--------+----------+  |
+|           |             |  |           |             |  |           |             |
+|           v             |  |           v             |  |           v             |
+|  +--------+----------+  |  |  +--------+----------+  |  |  +--------+----------+  |
+|  |  Docker Container |  |  |  |  Docker Container |  |  |  |  Docker Container |  |
+|  |     (Backend)     +--+<->+--+     (Backend)     +--+<->+--+     (Backend)     |  |
+|  +-------------------+  |  |  +-------------------+  |  |  +-------------------+  |
++-------------------------+  +-------------------------+  +-------------------------+
+                            |       VPC (Virtual Private Cloud)                     |
+                            +-------------------------------------------------------+
 ```
 
-## CI/CD Pipeline
+## Detailed Reasoning of Tools Used
 
-The CI/CD pipeline is configured using GitHub Actions with the following steps:
+- **AWS ECR (Elastic Container Registry)**: For storing Docker images.
+- **AWS ECS (Elastic Container Service)**: For running the Docker containers.
+- **AWS IAM (Identity and Access Management)**: For managing permissions.
+- **AWS VPC (Virtual Private Cloud)**: For creating a secure network environment.
+- **AWS Subnet**: For logically segmenting the VPC.
+- **AWS Internet Gateway**: For allowing access to the internet.
+- **AWS Route Table**: For managing routing within the VPC.
+- **AWS API Gateway**: For exposing APIs to the internet.
+- **AWS Lambda**: For serverless functions.
+- **AWS SNS (Simple Notification Service)**: For sending notifications.
+- **AWS SQS (Simple Queue Service)**: For message queuing.
+- **AWS EC2 (Elastic Compute Cloud)**: For running virtual servers.
+- **Docker**: For containerizing the application.
+- **Kubernetes**: For orchestrating the Docker containers.
+- **Terraform**: For managing infrastructure as code.
+- **GitHub Actions**: For automating the CI/CD pipeline.
+- **Flask**: For the backend web framework.
+- **TMDB API**: For fetching movie data.
 
-1. **Checkout Code**: Checkout the latest code from the repository.
-2. **Set up Docker Buildx**: Set up Docker Buildx for multi-platform builds.
-3. **Configure AWS Credentials**: Configure AWS credentials using GitHub Secrets.
-4. **Log in to Amazon ECR**: Authenticate Docker to the Amazon ECR registry.
-5. **Create ECR Repository**: Create the ECR repository if it doesn't exist.
-6. **Build Docker Image**: Build the Docker image for the backend application.
-7. **Tag Docker Image**: Tag the Docker image with the latest tag.
-8. **Push Docker Image to ECR**: Push the Docker image to Amazon ECR.
-9. **Terraform Init and Apply**: Initialize and apply the Terraform configuration to create/update infrastructure.
-10. **Deploy to Kubernetes**: Deploy the application to Kubernetes using the deployment and service configurations.
+## Versioning and Detailed Explanation to Start with Base Features of the Application
 
-## Secrets Management
+1. **Version 1.0.0**: Initial release with the following features:
+   - Basic movie browsing functionality using the TMDB API.
+   - Backend containerized with Docker.
+   - Deployment pipeline set up with GitHub Actions.
+   - Infrastructure managed with Terraform.
+   - Application deployed on AWS using ECS and Kubernetes.
 
-Secrets required for the CI/CD pipeline are stored in GitHub Secrets:
-- `AWS_ACCESS_KEY_ID`
+## Future Enhancements
 
+1. **User Authentication**: Implement user authentication using AWS Cognito.
+2. **Movie Reviews**: Allow users to add reviews to movies.
+3. **User Profiles**: Implement user profile management.
+4. **Notifications**: Use SNS to send notifications for new movie releases.
+5. **Messaging Queue**: Use SQS for handling asynchronous tasks.
 
-- `AWS_SECRET_ACCESS_KEY`
-- `AWS_REGION`
-- `AWS_ACCOUNT_ID`
-- `TMDB_API_KEY`
-- `KUBECONFIG` (Base64 encoded content of your kubeconfig file)
+## Full Code and Documentation in README.md
 
-## Kubernetes Deployment
+The complete code and documentation are included in the repository structure provided above. Each component is explained in detail, and the CI/CD workflows are fully automated to ensure a seamless deployment process.
 
-### Create the TMDB API Key Secret
+## GitHub Actions Workflow
 
-Before deploying the application, ensure the TMDB API key secret is created in the Kubernetes cluster.
-
-```sh
-kubectl create secret generic tmdb-api-key-secret --from-literal=TMDB_API_KEY=<YOUR_TMDB_API_KEY>
-```
-
-### Apply Kubernetes Resources
-
-```sh
-kubectl apply -f kubernetes/deployment.yml
-kubectl apply -f kubernetes/service.yml
-```
-
-## Destroy Infrastructure
-
-To destroy the infrastructure created by Terraform, a separate GitHub Actions workflow is provided (`destroy.yml`). This workflow will:
-1. Checkout the latest code from the repository.
-2. Configure AWS credentials using GitHub Secrets.
-3. Run `terraform destroy` to destroy all resources created by Terraform.
-4. Delete the ECR repository if it exists.
-5. Delete the IAM role and policy if they exist.
-
-## Getting Started
-
-### Prerequisites
-
-- AWS account with necessary permissions
-- Docker installed
-- Kubernetes cluster set up (e.g., EKS, GKE, AKS, or Minikube)
-- GitHub repository with Actions enabled
-
-### Clone the Repository
-
-```sh
-git clone https://github.com/yourusername/netflix-clone.git
-cd netflix-clone
-```
-
-### Setting up Environment Variables
-
-Set the required environment variables in GitHub Secrets.
-
-### Running the Application Locally
-
-1. **Build Docker Image**
-
-   ```sh
-   docker build -t netflix-clone:latest -f backend/Dockerfile backend
-   ```
-
-2. **Run Docker Container**
-
-   ```sh
-   docker run -p 5000:5000 --env TMDB_API_KEY=your_tmdb_api_key netflix-clone:latest
-   ```
-
-### Trigger CI/CD Pipeline
-
-Push changes to the repository or create a pull request to trigger the CI/CD pipeline.
-
-### Destroy Infrastructure
-
-Trigger the `Destroy Infrastructure` workflow manually from the GitHub Actions tab.
-
-## Conclusion
-
-This project demonstrates a comprehensive setup for deploying a cloud-native application using modern DevOps practices. The CI/CD pipeline ensures that the application can be reliably and efficiently deployed, while Terraform provides infrastructure as code for reproducibility and scalability.
-```
-
-Ensure you replace placeholders such as `<YOUR_AWS_ACCOUNT_ID>`, `<YOUR_AWS_REGION>`, and `<YOUR_TMDB_API_KEY>` with actual values. Commit and push these changes to your repository. This setup should provide a comprehensive record of your project and ensure that your CI/CD pipeline can handle idempotent ECS service creation.
-
-test
+The provided GitHub Actions workflows are designed to automate the CI/CD process, including the destroy workflow to clean up all resources created in AWS. This ensures that the entire lifecycle of the application, from development to deployment and eventual teardown, is managed efficiently and securely.

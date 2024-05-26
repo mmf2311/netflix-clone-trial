@@ -152,3 +152,42 @@ resource "aws_ecs_service" "netflix_clone_service" {
   depends_on = [aws_ecs_task_definition.netflix_clone_task]
 }
 
+# API Gateway
+resource "aws_api_gateway_rest_api" "netflix_clone_api" {
+  name = "netflix-clone-api"
+}
+
+resource "aws_api_gateway_resource" "netflix_clone_resource" {
+  rest_api_id = aws_api_gateway_rest_api.netflix_clone_api.id
+  parent_id   = aws_api_gateway_rest_api.netflix_clone_api.root_resource_id
+  path_part   = "movies"
+}
+
+resource "aws_api_gateway_method" "netflix_clone_method" {
+  rest_api_id   = aws_api_gateway_rest_api.netflix_clone_api.id
+  resource_id   = aws_api_gateway_resource.netflix_clone_resource.id
+  http_method   = "GET"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "netflix_clone_integration" {
+  rest_api_id = aws_api_gateway_rest_api.netflix_clone_api.id
+  resource_id = aws_api_gateway_resource.netflix_clone_resource.id
+  http_method = aws_api_gateway_method.netflix_clone_method.http_method
+  type        = "HTTP_PROXY"
+  uri         = "http://example.com/movies"  # Replace with actual backend URI
+}
+
+resource "aws_api_gateway_deployment" "netflix_clone_deployment" {
+  depends_on  = [aws_api_gateway_integration.netflix_clone_integration]
+  rest_api_id = aws_api_gateway_rest_api.netflix_clone_api.id
+  stage_name  = "prod"
+}
+
+output "ecr_repository_url" {
+  value = length(aws_ecr_repository.netflix_clone) > 0 ? aws_ecr_repository.netflix_clone[0].repository_url : data.aws_ecr_repository.existing_netflix_clone.repository_url
+}
+
+output "api_gateway_url" {
+  value = aws_api_gateway_deployment.netflix_clone_deployment.invoke_url
+}
