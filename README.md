@@ -1,63 +1,93 @@
-The warning about resource limits is important and should not be ignored. Setting resource limits for your containers ensures that they do not consume more resources than they are allocated, which can help prevent resource starvation for other processes running on the same node.
+The error you're seeing is because the inputs provided to the `aws-actions/amazon-ecr-login@v1` action are incorrect. Instead of `access-key-id` and `secret-access-key`, you should use `aws-access-key-id` and `aws-secret-access-key`. Here is the corrected code for the `ci-cd.yml` workflow:
 
-The warning regarding `secretKeyRef` is providing information about how to reference Kubernetes secrets. It is not an error, but it's good to ensure that your secrets are correctly configured.
-
-Here's how you can add resource limits to your container and ensure that your `secretKeyRef` is correctly configured:
-
-### Updated Kubernetes Config
-
-#### deployment.yml
+### Corrected .github/workflows/ci-cd.yml
 ```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: group-3-deployment-netflix-clone
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: netflix-clone
-  template:
-    metadata:
-      labels:
-        app: netflix-clone
-    spec:
-      containers:
-      - name: netflix-clone
-        image: YOUR_ECR_URL/group-3-ecr-netflix-clone:latest
-        ports:
-        - containerPort: 5000
-        env:
-        - name: TMDB_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: tmdb-api-key-secret
-              key: TMDB_API_KEY
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+      - feature/*
+  pull_request:
+    branches:
+      - dev
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+
+    - name: Log in to Amazon ECR
+      uses: aws-actions/amazon-ecr-login@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        file: ./backend/Dockerfile
+        push: true
+        tags: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-ecr-netflix-clone:latest
+
+    - name: Deploy to ECR
+      run: |
+        aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+        docker tag netflix-clone:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-ecr-netflix-clone:latest
+        docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-ecr-netflix-clone:latest
+
+    - name: Terraform Init and Apply
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+      run: |
+        cd terraform
+        terraform init
+        terraform apply -auto-approve
+
+    - name: Deploy to Kubernetes
+      run: |
+        kubectl apply -f kubernetes/deployment.yml
+        kubectl apply -f kubernetes/service.yml
 ```
 
-In this configuration:
+### Updated .github/workflows/destroy.yml
+```yaml
+name: Destroy Infrastructure
 
-- `requests` specify the amount of CPU and memory that the container is guaranteed.
-- `limits` specify the maximum amount of CPU and memory that the container is allowed to use.
+on:
+  workflow_dispatch:
 
-### Secret Configuration
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
 
-Ensure that the secret `tmdb-api-key-secret` is created in the same namespace where your deployment is running. You can create the secret using the following command:
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
 
-```bash
-kubectl create secret generic tmdb-api-key-secret --from-literal=TMDB_API_KEY=your_tmdb_api_key
+    - name: Terraform Destroy
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+      run: |
+        cd terraform
+        terraform destroy -auto-approve
 ```
 
 ### Full Updated Code and Documentation
-
-Here is the full set of updated files:
 
 #### Dockerfile
 ```dockerfile
@@ -200,7 +230,7 @@ spec:
     spec:
       containers:
       - name: netflix-clone
-        image: YOUR_ECR_URL/group-3-ecr-netflix-clone:latest
+        image: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-ecr-netflix-clone:latest
         ports:
         - containerPort: 5000
         env:
@@ -233,95 +263,6 @@ spec:
     targetPort: 5000
 ```
 
-### GitHub Actions Workflows
-
-#### .github/workflows/ci-cd.yml
-```yaml
-name: CI/CD Pipeline
-
-on:
-  push:
-    branches:
-      - dev
-      - main
-      - feature/*
-  pull_request:
-    branches:
-      - dev
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v1
-
-    - name: Log in to Amazon ECR
-      uses: aws-actions/amazon-ecr-login@v1
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v2
-      with:
-        context: .
-        file: ./backend/Dockerfile
-        push: true
-        tags: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-ecr-netflix-clone:latest
-
-    - name: Deploy to ECR
-      run: |
-        aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
-        docker tag netflix-clone:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-ecr-netflix-clone:latest
-        docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-ecr-netflix-clone:latest
-
-    - name: Terraform Init and Apply
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-      run: |
-        cd terraform
-        terraform init
-        terraform apply -auto-approve
-
-    - name: Deploy to Kubernetes
-      run: |
-        kubectl apply -f kubernetes/deployment.yml
-        kubectl apply -f kubernetes/service.yml
-```
-
-#### .github/workflows/destroy.yml
-```yaml
-name: Destroy Infrastructure
-
-on:
-  workflow_dispatch:
-
-jobs:
-  destroy:
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-
-    - name: Terraform Destroy
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-      run: |
-        cd terraform
-        terraform destroy -auto-approve
-```
-
 ### Documentation
 
 #### docs/architecture.md
@@ -330,9 +271,7 @@ jobs:
 
 The architecture consists of the following components:
 
-- **Users**:
-
- End users interact with the application through a web interface.
+- **Users**: End users interact with the application through a web interface.
 - **Route 53**: AWS Route 53 is used for DNS management, directing user traffic to the appropriate endpoints.
 - **API Gateway**: AWS API Gateway handles the routing and exposure of RESTful APIs created by AWS Lambda functions.
 - **Lambda**: AWS Lambda functions execute the backend logic in a serverless environment, handling requests and interacting with other AWS services.
@@ -344,7 +283,9 @@ The architecture consists of the following components:
 - **ECR**: AWS Elastic Container Registry (ECR) is used to store and manage Docker images.
 - **ECS**: AWS Elastic Container Service (ECS) is used to run containerized applications. It works with EC2 to provide scalable compute capacity.
 - **EC2**: AWS EC2 instances provide the underlying compute capacity for running the ECS cluster and other resources.
-- **Kubernetes**: Kubernetes is used for container orchestration, managing the deployment, scaling, and operations of containerized applications.
+- **Kubernetes**: Kubernetes is used for container orchestration, managing the deployment, scaling,
+
+ and operations of containerized applications.
 - **Terraform**: Terraform is used for managing infrastructure as code, automating the setup and configuration of all the necessary AWS resources.
 
 ### Detailed Architecture Diagram
@@ -591,9 +532,7 @@ This project is a Netflix clone application built using GitHub Actions, AWS reso
 2. [Project Overview](#project-overview)
 3. [Features](#features)
 4. [User Experience](#user-experience)
-5. [Project
-
- Structure](#project-structure)
+5. [Project Structure](#project-structure)
 6. [Versioning](#versioning)
 7. [Requirements and Fulfillment](#requirements-and-fulfillment)
 8. [Getting Started](#getting-started)
@@ -634,7 +573,9 @@ For a detailed overview of the user experience, refer to the [User Experience Ov
   - `destroy.yml`: Workflow to destroy all AWS resources
 - `backend`: Backend application source code and Dockerfile
   - `src`: Source code directory
-    - `main.py`: Main application file
+    - `main.py`: Main application
+
+ file
     - `utils.py`: Utility functions
 - `terraform`: Terraform scripts for infrastructure as code
   - `main.tf`: Main Terraform configuration
@@ -830,9 +771,7 @@ The architecture consists of the following components:
                   +------------+
                         |
                         |
-                  +-----
-
-+------+
+                  +-----+------+
                   |  Docker    |
                   +------------+
                         |
@@ -890,4 +829,6 @@ To contribute to this project:
 This project is licensed under the MIT License.
 ```
 
-This README file and code structure include all the necessary details, including a detailed network architecture diagram, explanations, full code for each file, and a user experience overview document. If you encounter any further issues or need additional adjustments, please let me know!
+This README file and code structure
+
+ include all the necessary details, including a detailed network architecture diagram, explanations, full code for each file, and a user experience overview document. If you encounter any further issues or need additional adjustments, please let me know!

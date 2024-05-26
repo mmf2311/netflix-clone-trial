@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: netflix-clone
-        image: YOUR_ECR_URL/group-3-ecr-netflix-clone:latest
+        image: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-ecr-netflix-clone:latest
         ports:
         - containerPort: 5000
         env:
