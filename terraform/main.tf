@@ -65,21 +65,39 @@ resource "aws_iam_role" "ecs_task_execution_role" {
       }
     ]
   })
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes        = [name]
+  }
 }
 
 resource "aws_iam_policy_attachment" "ecs_task_execution_policy" {
   name       = "ecs-task-execution-policy-attachment"
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
   roles      = [aws_iam_role.ecs_task_execution_role.name]
+
+  lifecycle {
+    ignore_changes = [roles]
+  }
 }
 
 resource "aws_ecr_repository" "netflix_clone" {
   name                 = "group-3-ecr-netflix-clone"
   image_tag_mutability = "MUTABLE"
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes        = [name]
+  }
 }
 
 resource "aws_ecs_cluster" "netflix_clone_cluster" {
   name = "group-3-ecs-cluster-netflix-clone"
+
+  lifecycle {
+    ignore_changes = [name]
+  }
 }
 
 resource "aws_ecs_task_definition" "netflix_clone_task" {
@@ -105,6 +123,10 @@ resource "aws_ecs_task_definition" "netflix_clone_task" {
       value = var.tmdb_api_key
     }]
   }])
+
+  lifecycle {
+    ignore_changes = [family]
+  }
 }
 
 resource "aws_ecs_service" "netflix_clone_service" {
@@ -117,5 +139,9 @@ resource "aws_ecs_service" "netflix_clone_service" {
   network_configuration {
     subnets         = [aws_subnet.netflix_clone_subnet.id]
     assign_public_ip = true
+  }
+
+  lifecycle {
+    ignore_changes = [name]
   }
 }
