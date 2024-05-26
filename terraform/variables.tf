@@ -11,3 +11,8 @@ variable "timestamp" {
   description = "Timestamp for unique naming"
   default     = formatdate("YYYYMMDD-HHMMSS", timestamp())
 }
+
+variable "branch_name" {
+  description = "The branch name for identifying the environment"
+  type        = string
+}
