@@ -74,9 +74,7 @@ resource "aws_iam_policy_attachment" "ecs_task_execution_policy" {
 }
 
 resource "aws_ecr_repository" "netflix_clone" {
-  count = length(data.aws_ecr_repository.existing.id) == 0 ? 1 : 0
-
-  name = "group-3-ecr-netflix-clone"
+  name                 = "group-3-ecr-netflix-clone"
   image_tag_mutability = "MUTABLE"
 }
 
@@ -120,4 +118,8 @@ resource "aws_ecs_service" "netflix_clone_service" {
     subnets         = [aws_subnet.netflix_clone_subnet.id]
     assign_public_ip = true
   }
+}
+
+output "ecr_repository_url" {
+  value = aws_ecr_repository.netflix_clone.repository_url
 }
