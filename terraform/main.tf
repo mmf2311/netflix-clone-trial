@@ -73,7 +73,14 @@ resource "aws_ecs_service" "netflix_clone_service" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets         = ["subnet-0123456789abcdef0"]
+    subnets         = [
+      "subnet-VALID_SUBNET_ID_1",
+      "subnet-VALID_SUBNET_ID_2"
+    ]
     assign_public_ip = true
   }
+}
+
+output "ecr_repository_url" {
+  value = data.aws_ecr_repository.existing.repository_url
 }
