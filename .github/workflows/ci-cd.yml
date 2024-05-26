@@ -50,7 +50,6 @@ jobs:
     - name: Set up kubectl
       if: github.ref == 'refs/heads/prod' || github.ref == 'refs/heads/stage' || github.ref == 'refs/heads/dev'
       run: |
-        mkdir -p $HOME/.kube
         echo "${{ secrets.KUBECONFIG }}" | base64 --decode > $HOME/.kube/config
 
     - name: Deploy to Kubernetes
