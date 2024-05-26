@@ -26,6 +26,11 @@ resource "aws_ecs_task_definition" "netflix_clone_task" {
       containerPort = 5000
       hostPort      = 5000
     }]
+
+    environment = [{
+      name  = "TMDB_API_KEY"
+      value = var.tmdb_api_key
+    }]
   }])
 }
 
