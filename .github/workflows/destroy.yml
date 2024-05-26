@@ -53,42 +53,6 @@ jobs:
         TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
         TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
 
-    - name: Delete VPCs
-      run: |
-        VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=group-3-vpc-netflix-clone-${{ github.event.inputs.branch }}-*" --query "Vpcs[].VpcId" --output text)
-        if [ -z "$VPC_IDS" ]; then
-          echo "No VPCs found for deletion. Skipping."
-        else
-          for VPC_ID in $VPC_IDS; do
-            echo "Deleting VPC: $VPC_ID"
-            aws ec2 delete-vpc --vpc-id $VPC_ID
-          done
-        fi
-
-    - name: Delete Subnets
-      run: |
-        SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=group-3-subnet-netflix-clone-${{ github.event.inputs.branch }}-*" --query "Subnets[].SubnetId" --output text)
-        if [ -z "$SUBNET_IDS" ]; then
-          echo "No Subnets found for deletion. Skipping."
-        else
-          for SUBNET_ID in $SUBNET_IDS; do
-            echo "Deleting Subnet: $SUBNET_ID"
-            aws ec2 delete-subnet --subnet-id $SUBNET_ID
-          done
-        fi
-
-    - name: Delete Internet Gateways
-      run: |
-        IGW_IDS=$(aws ec2 describe-internet-gateways --filters "Name=tag:Name,Values=group-3-igw-netflix-clone-${{ github.event.inputs.branch }}-*" --query "InternetGateways[].InternetGatewayId" --output text)
-        if [ -z "$IGW_IDS" ]; then
-          echo "No Internet Gateways found for deletion. Skipping."
-        else
-          for IGW_ID in $IGW_IDS; do
-            echo "Deleting Internet Gateway: $IGW_ID"
-            aws ec2 delete-internet-gateway --internet-gateway-id $IGW_ID
-          done
-        fi
-
     - name: Delete ECS Cluster
       run: |
         CLUSTER_NAME="group-3-ecs-cluster-netflix-clone-${{ github.event.inputs.branch }}"
@@ -107,5 +71,55 @@ jobs:
           for TASK_DEFINITION in $TASK_DEFINITIONS; do
             echo "Deregistering Task Definition: $TASK_DEFINITION"
             aws ecs deregister-task-definition --task-definition $TASK_DEFINITION
+          done
+        fi
+
+    - name: Detach and Delete Internet Gateways
+      run: |
+        IGW_IDS=$(aws ec2 describe-internet-gateways --filters "Name=tag:Name,Values=group-3-igw-netflix-clone-${{ github.event.inputs.branch }}-*" --query "InternetGateways[].InternetGatewayId" --output text)
+        if [ -z "$IGW_IDS" ]; then
+          echo "No Internet Gateways found for deletion. Skipping."
+        else
+          for IGW_ID in $IGW_IDS; do
+            echo "Detaching and deleting Internet Gateway: $IGW_ID"
+            VPC_ID=$(aws ec2 describe-internet-gateways --internet-gateway-ids $IGW_ID --query "InternetGateways[0].Attachments[0].VpcId" --output text)
+            aws ec2 detach-internet-gateway --internet-gateway-id $IGW_ID --vpc-id $VPC_ID
+            aws ec2 delete-internet-gateway --internet-gateway-id $IGW_ID
+          done
+        fi
+
+    - name: Delete Subnets
+      run: |
+        SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=group-3-subnet-netflix-clone-${{ github.event.inputs.branch }}-*" --query "Subnets[].SubnetId" --output text)
+        if [ -z "$SUBNET_IDS" ]; then
+          echo "No Subnets found for deletion. Skipping."
+        else
+          for SUBNET_ID in $SUBNET_IDS; do
+            echo "Deleting Subnet: $SUBNET_ID"
+            aws ec2 delete-subnet --subnet-id $SUBNET_ID
+          done
+        fi
+
+    - name: Delete Route Tables
+      run: |
+        RT_IDS=$(aws ec2 describe-route-tables --filters "Name=tag:Name,Values=group-3-rt-netflix-clone-${{ github.event.inputs.branch }}-*" --query "RouteTables[].RouteTableId" --output text)
+        if [ -z "$RT_IDS" ]; then
+          echo "No Route Tables found for deletion. Skipping."
+        else
+          for RT_ID in $RT_IDS; do
+            echo "Deleting Route Table: $RT_ID"
+            aws ec2 delete-route-table --route-table-id $RT_ID
+          done
+        fi
+
+    - name: Delete VPCs
+      run: |
+        VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=group-3-vpc-netflix-clone-${{ github.event.inputs.branch }}-*" --query "Vpcs[].VpcId" --output text)
+        if [ -z "$VPC_IDS" ]; then
+          echo "No VPCs found for deletion. Skipping."
+        else
+          for VPC_ID in $VPC_IDS; do
+            echo "Deleting VPC: $VPC_ID"
+            aws ec2 delete-vpc --vpc-id $VPC_ID
           done
         fi
