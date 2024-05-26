@@ -1,4 +1,4 @@
-Certainly! Below are the amended codes and documentation with the specified naming convention `group-3-[resource]-[app-name]` where `resource` is the name of the resource being used and `app-name` is `netflix-clone`.
+Certainly! Here is the complete code and documentation, including the necessary updates for handling secrets and environment variables.
 
 ### GitHub Repository Structure
 ```plaintext
@@ -9,6 +9,7 @@ netflix-clone/
 │   │   ├── destroy.yml
 ├── backend/
 │   ├── Dockerfile
+│   ├── requirements.txt
 │   ├── src/
 │   │   ├── main.py
 │   │   ├── utils.py
@@ -41,6 +42,12 @@ COPY src/ /app
 CMD ["python", "main.py"]
 ```
 
+#### requirements.txt
+```
+Flask==2.0.3
+requests==2.26.0
+```
+
 #### src/main.py
 ```python
 from flask import Flask, jsonify, request
@@ -59,19 +66,14 @@ if __name__ == '__main__':
 
 #### src/utils.py
 ```python
+import os
 import requests
 
 def get_movie_data(title):
-    api_key = 'your_tmdb_api_key'
+    api_key = os.getenv('TMDB_API_KEY')
     url = f'https://api.themoviedb.org/3/search/movie?api_key={api_key}&query={title}'
     response = requests.get(url)
     return response.json()
-```
-
-#### requirements.txt
-```
-Flask==2.0.3
-requests==2.26.0
 ```
 
 ### Terraform Code
@@ -106,6 +108,11 @@ resource "aws_ecs_task_definition" "netflix_clone_task" {
       containerPort = 5000
       hostPort      = 5000
     }]
+
+    environment = [{
+      name  = "TMDB_API_KEY"
+      value = var.tmdb_api_key
+    }]
   }])
 }
 
@@ -128,6 +135,10 @@ resource "aws_ecs_service" "netflix_clone_service" {
 variable "aws_region" {
   description = "The AWS region to deploy to"
   default     = "us-west-2"
+}
+
+variable "tmdb_api_key" {
+  description = "Your TMDB API key"
 }
 ```
 
@@ -161,6 +172,12 @@ spec:
         image: YOUR_ECR_URL/group-3-ecr-netflix-clone:latest
         ports:
         - containerPort: 5000
+        env:
+        - name: TMDB_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: tmdb-api-key-secret
+              key: TMDB_API_KEY
 ```
 
 #### service.yml
@@ -208,6 +225,10 @@ jobs:
     - name: Log in to Amazon ECR
       id: ecr_login
       uses: aws-actions/amazon-ecr-login@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v2
@@ -224,6 +245,10 @@ jobs:
         docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-ecr-netflix-clone:latest
 
     - name: Terraform Init and Apply
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_REGION: ${{ secrets.AWS_REGION }}
       run: |
         cd terraform
         terraform init
@@ -251,6 +276,10 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Terraform Destroy
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_REGION: ${{ secrets.AWS_REGION }}
       run: |
         cd terraform
         terraform destroy -auto-approve
@@ -263,17 +292,23 @@ jobs:
 # Network Architecture
 
 The architecture consists of the following components:
-- **API Gateway**: Exposes the Lambda functions as RESTful APIs.
-- **Lambda**: Handles the business logic in a serverless environment.
-- **Docker**: Ensures portability and consistency across different environments.
-- **Terraform**: Manages infrastructure as code, providing version control and reusability.
-- **ECR**: Stores Docker images.
-- **ECS**: Runs containerized applications.
-- **SNS**: Sends notifications.
-- **SQS**: Manages message queues to decouple microservices.
-- **EC2**: Runs virtual servers.
-- **Kubernetes**: Manages container orchestration.
-- **TMDB API**: Provides movie data used for searching and displaying movie details.
+
+- **Users**: End users interact with the application through a web interface.
+- **Route 53**: AWS Route 53 is used for DNS management, directing user traffic to the appropriate endpoints.
+- **API Gateway**: AWS API Gateway handles the routing and exposure of RESTful APIs created by AWS Lambda functions.
+- **Lambda**: AWS Lambda functions execute the backend logic in a serverless environment, handling requests and interacting with other AWS services.
+- **DynamoDB**: AWS DynamoDB is a NoSQL database used to store application data, such as user profiles and movie details.
+- **SQS**: AWS Simple Queue Service (SQS) is used for decoupling microservices and managing message queues for asynchronous processing.
+- **SNS**: AWS Simple Notification Service (SNS) is used to send notifications and messages to users or other systems.
+- **TMDB API**: An external API used to fetch movie data, including details, search results, and other relevant information. It is integrated into the backend application using the `utils.py` module.
+- **Docker**: Docker is used to containerize the application, ensuring portability and consistency across different environments.
+- **ECR**: AWS Elastic Container Registry (ECR) is used to store and manage Docker images.
+- **ECS
+
+**: AWS Elastic Container Service (ECS) is used to run containerized applications. It works with EC2 to provide scalable compute capacity.
+- **EC2**: AWS EC2 instances provide the underlying compute capacity for running the ECS cluster and other resources.
+- **Kubernetes**: Kubernetes is used for container orchestration, managing the deployment, scaling, and operations of containerized applications.
+- **Terraform**: Terraform is used for managing infrastructure as code, automating the setup and configuration of all the necessary AWS resources.
 
 ### Detailed Architecture Diagram
 
@@ -309,6 +344,36 @@ The architecture consists of the following components:
                   +-----+------+
                   |  TMDB API  |
                   +------------+
+                        |
+                        |
+                  +-----+------+
+                  |  Docker    |
+                  +------------+
+                        |
+                        |
+                  +-----+------+
+                  |  ECR       |
+                  +------------+
+                        |
+                        |
+                  +-----+------+
+                  |  ECS       |
+                  +------------+
+                        |
+                        |
+                  +-----+------+
+                  |  EC2       |
+                  +------------+
+                        |
+                        |
+                  +-----+------+
+                  |  Kubernetes|
+                  +------------+
+                        |
+                        |
+                  +-----+------+
+                  |  Terraform |
+                  +------------+
 ```
 
 #### docs/setup.md
@@ -329,9 +394,7 @@ The architecture consists of the following components:
    cd netflix-clone
    ```
 
-2.
-
- **Configure AWS CLI**:
+2. **Configure AWS CLI**:
    ```bash
    aws configure
    ```
@@ -350,7 +413,12 @@ The architecture consists of the following components:
    terraform apply -auto-approve
    ```
 
-5. **Deploy to Kubernetes**:
+5. **Create Kubernetes Secret for TMDB API Key**:
+   ```bash
+   kubectl create secret generic tmdb-api-key-secret --from-literal=TMDB_API_KEY=your_tmdb_api_key
+   ```
+
+6. **Deploy to Kubernetes**:
    ```bash
    kubectl apply -f ./kubernetes
    ```
@@ -358,6 +426,13 @@ The architecture consists of the following components:
 ## Environment Variables
 - `AWS_REGION`: The AWS region to deploy to.
 - `TMDB_API_KEY`: Your TMDB API key for movie data.
+
+## GitHub Secrets
+Ensure the following secrets are added to your GitHub repository:
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_REGION`
+- `TMDB_API_KEY`
 ```
 
 ### README.md
@@ -482,7 +557,12 @@ This project follows Semantic Versioning:
    terraform apply -auto-approve
    ```
 
-5. **Deploy to Kubernetes**:
+5. **Create Kubernetes Secret for TMDB API Key**:
+   ```bash
+   kubectl create secret generic tmdb-api-key-secret --from-literal=TMDB_API_KEY=your_tmdb_api_key
+   ```
+
+6. **Deploy to Kubernetes**:
    ```bash
    kubectl apply -f ./kubernetes
    ```
@@ -490,7 +570,9 @@ This project follows Semantic Versioning:
 ## CI/CD Pipeline
 The CI/CD pipeline is managed using GitHub Actions and includes the following workflows:
 - **CI/CD Workflow (ci-cd.yml)**: Builds, tests, and deploys the application on every push or pull request to the `dev`, `main`, or `feature/*` branches.
-- **Destroy Workflow (destroy.yml)**: Destroys all resources created in AWS.
+- **Destroy Workflow (destroy.yml)**: Destro
+
+ys all resources created in AWS.
 
 ### CI/CD Workflow Details
 1. **Build and push Docker image**:
@@ -508,17 +590,21 @@ The CI/CD pipeline is managed using GitHub Actions and includes the following wo
 
 ## Network Architecture
 The architecture consists of the following components:
-- **API Gateway**: Exposes the Lambda functions as RESTful APIs.
-- **Lambda**: Handles the business logic in a serverless environment.
-- **Docker**: Ensures portability and consistency across different environments.
-- **Terraform**: Manages infrastructure as code, providing version control and reusability.
-- **ECR**: Stores Docker images.
-- **ECS**: Runs containerized applications.
-- **SNS**: Sends notifications.
-- **SQS**: Manages message queues to decouple microservices.
-- **EC2**: Runs virtual servers.
-- **Kubernetes**: Manages container orchestration.
-- **TMDB API**: Provides movie data used for searching and displaying movie details.
+
+- **Users**: End users interact with the application through a web interface.
+- **Route 53**: AWS Route 53 is used for DNS management, directing user traffic to the appropriate endpoints.
+- **API Gateway**: AWS API Gateway handles the routing and exposure of RESTful APIs created by AWS Lambda functions.
+- **Lambda**: AWS Lambda functions execute the backend logic in a serverless environment, handling requests and interacting with other AWS services.
+- **DynamoDB**: AWS DynamoDB is a NoSQL database used to store application data, such as user profiles and movie details.
+- **SQS**: AWS Simple Queue Service (SQS) is used for decoupling microservices and managing message queues for asynchronous processing.
+- **SNS**: AWS Simple Notification Service (SNS) is used to send notifications and messages to users or other systems.
+- **TMDB API**: An external API used to fetch movie data, including details, search results, and other relevant information. It is integrated into the backend application using the `utils.py` module.
+- **Docker**: Docker is used to containerize the application, ensuring portability and consistency across different environments.
+- **ECR**: AWS Elastic Container Registry (ECR) is used to store and manage Docker images.
+- **ECS**: AWS Elastic Container Service (ECS) is used to run containerized applications. It works with EC2 to provide scalable compute capacity.
+- **EC2**: AWS EC2 instances provide the underlying compute capacity for running the ECS cluster and other resources.
+- **Kubernetes**: Kubernetes is used for container orchestration, managing the deployment, scaling, and operations of containerized applications.
+- **Terraform**: Terraform is used for managing infrastructure as code, automating the setup and configuration of all the necessary AWS resources.
 
 ### Detailed Architecture Diagram
 
@@ -554,6 +640,36 @@ The architecture consists of the following components:
                   +-----+------+
                   |  TMDB API  |
                   +------------+
+                        |
+                        |
+                  +-----+------+
+                  |  Docker    |
+                  +------------+
+                        |
+                        |
+                  +-----+------+
+                  |  ECR       |
+                  +------------+
+                        |
+                        |
+                  +-----+------+
+                  |  ECS       |
+                  +------------+
+                        |
+                        |
+                  +-----+------+
+                  |  EC2       |
+                  +------------+
+                        |
+                        |
+                  +-----+------+
+                  |  Kubernetes|
+                  +------------+
+                        |
+                        |
+                  +-----+------+
+                  |  Terraform |
+                  +------------+
 ```
 
 ### Explanation of TMDB API Usage
@@ -564,9 +680,7 @@ The TMDB API is used to fetch movie data, such as movie details, search results,
 - **Recommendation Engine**: Develop a recommendation engine to suggest movies based on user preferences and watch history.
 - **Video Streaming**: Integrate video streaming capabilities.
 - **User Notifications**: Use SNS to notify users about new movies, updates, or recommendations.
-- **Offline Mode**: Allow users to download movies
-
- for offline viewing.
+- **Offline Mode**: Allow users to download movies for offline viewing.
 - **Multi-language Support**: Add support for multiple languages to cater to a broader audience.
 
 ## Documentation
@@ -584,4 +698,4 @@ To contribute to this project:
 This project is licensed under the MIT License.
 ```
 
-This README file and code structure now includes the specified naming convention for AWS resources and provides detailed information on the project. If there are any further details or modifications needed, please let me know!
+This README file and code structure includes all the necessary details, including a detailed network architecture diagram, explanations, and full code for each file. If there are any further adjustments or additional details needed, please let me know!
