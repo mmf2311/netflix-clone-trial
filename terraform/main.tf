@@ -77,7 +77,3 @@ resource "aws_ecs_service" "netflix_clone_service" {
     assign_public_ip = true
   }
 }
-
-output "ecr_repository_url" {
-  value = data.aws_ecr_repository.existing.repository_url
-}
