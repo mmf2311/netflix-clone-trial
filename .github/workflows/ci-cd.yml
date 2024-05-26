@@ -63,6 +63,17 @@ jobs:
         terraform init
         terraform apply -auto-approve
 
+    - name: Set up Kubernetes
+      uses: azure/setup-kubectl@v1
+      with:
+        version: 'latest'
+
+    - name: Configure Kubernetes context
+      env:
+        KUBECONFIG: ${{ secrets.KUBECONFIG }}
+      run: |
+        echo "${{ secrets.KUBECONFIG }}" | base64 --decode > $HOME/.kube/config
+
     - name: Deploy to Kubernetes
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
