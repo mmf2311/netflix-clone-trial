@@ -531,3 +531,5 @@ This project demonstrates a comprehensive setup for deploying a cloud-native app
 ```
 
 Ensure you replace placeholders such as `YOUR_ECR_URL` and `your_tmdb_api_key` with actual values. Commit and push these changes to your repository. This setup should provide a comprehensive record of your project.
+
+test
