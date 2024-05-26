@@ -9,12 +9,21 @@ resource "aws_vpc" "vpc" {
   }
 }
 
-resource "aws_subnet" "subnet" {
-  vpc_id     = aws_vpc.vpc.id
-  cidr_block = "10.0.1.0/24"
+resource "aws_subnet" "subnet_a" {
+  vpc_id            = aws_vpc.vpc.id
+  cidr_block        = "10.0.1.0/24"
   availability_zone = "us-east-1a"
   tags = {
-    Name = "group-3-subnet-netflix-clone-${var.branch_name}-${local.timestamp}"
+    Name = "group-3-subnet-a-netflix-clone-${var.branch_name}-${local.timestamp}"
+  }
+}
+
+resource "aws_subnet" "subnet_b" {
+  vpc_id            = aws_vpc.vpc.id
+  cidr_block        = "10.0.2.0/24"
+  availability_zone = "us-east-1b"
+  tags = {
+    Name = "group-3-subnet-b-netflix-clone-${var.branch_name}-${local.timestamp}"
   }
 }
 
@@ -23,7 +32,7 @@ resource "aws_eks_cluster" "eks_cluster" {
   role_arn = aws_iam_role.eks_cluster_role.arn
 
   vpc_config {
-    subnet_ids = [aws_subnet.subnet.id]
+    subnet_ids = [aws_subnet.subnet_a.id, aws_subnet.subnet_b.id]
   }
 
   depends_on = [
@@ -118,7 +127,7 @@ resource "aws_ecs_service" "netflix_clone_service" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets = [aws_subnet.subnet.id]
+    subnets = [aws_subnet.subnet_a.id, aws_subnet.subnet_b.id]
     assign_public_ip = true
   }
 
@@ -127,4 +136,16 @@ resource "aws_ecs_service" "netflix_clone_service" {
     aws_ecr_repository.netflix_clone,
     aws_ecs_task_definition.netflix_clone_task,
   ]
+}
+
+output "ecr_repository_url" {
+  value = aws_ecr_repository.netflix_clone.repository_url
+}
+
+output "cluster_name" {
+  value = aws_eks_cluster.eks_cluster.name
+}
+
+output "kubeconfig" {
+  value = aws_eks_cluster.eks_cluster.endpoint
 }
