@@ -1,4 +1,6 @@
-To handle the case where resources already exist, we can use the `lifecycle` block with the `create_before_destroy` and `ignore_changes` arguments in Terraform. This will help to avoid errors when the resources already exist.
+The issue occurs because Terraform cannot find the `aws_ecr_repository.netflix_clone` resource when it tries to output its URL. This is likely because the condition for creating the repository (`count` attribute) results in no resources being created, and thus the resource collection is empty.
+
+To fix this, we need to ensure that the ECR repository is either created or fetched correctly. Here’s an improved approach:
 
 ### Updated terraform/main.tf
 
@@ -54,8 +56,15 @@ resource "aws_route_table_association" "netflix_clone_route_table_association" {
   route_table_id = aws_route_table.netflix_clone_route_table.id
 }
 
+# Check for existing IAM Role
+data "aws_iam_role" "existing_ecs_task_execution_role" {
+  name = "group-3-ecsTaskExecutionRole"
+}
+
 # IAM Role and Policy for ECS Task Execution
 resource "aws_iam_role" "ecs_task_execution_role" {
+  count = length(data.aws_iam_role.existing_ecs_task_execution_role.arn) == 0 ? 1 : 0
+
   name = "group-3-ecsTaskExecutionRole"
 
   assume_role_policy = jsonencode({
@@ -70,39 +79,30 @@ resource "aws_iam_role" "ecs_task_execution_role" {
       }
     ]
   })
-
-  lifecycle {
-    create_before_destroy = true
-    ignore_changes        = [name]
-  }
 }
 
 resource "aws_iam_policy_attachment" "ecs_task_execution_policy" {
+  depends_on = [aws_iam_role.ecs_task_execution_role]
+
   name       = "ecs-task-execution-policy-attachment"
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-  roles      = [aws_iam_role.ecs_task_execution_role.name]
+  roles      = length(aws_iam_role.ecs_task_execution_role) > 0 ? [aws_iam_role.ecs_task_execution_role[0].name] : [data.aws_iam_role.existing_ecs_task_execution_role.name]
+}
 
-  lifecycle {
-    ignore_changes = [roles]
-  }
+# Check for existing ECR repository
+data "aws_ecr_repository" "existing_netflix_clone" {
+  name = "group-3-ecr-netflix-clone"
 }
 
 resource "aws_ecr_repository" "netflix_clone" {
+  count = length(data.aws_ecr_repository.existing_netflix_clone.repository_url) == 0 ? 1 : 0
+
   name                 = "group-3-ecr-netflix-clone"
   image_tag_mutability = "MUTABLE"
-
-  lifecycle {
-    create_before_destroy = true
-    ignore_changes        = [name]
-  }
 }
 
 resource "aws_ecs_cluster" "netflix_clone_cluster" {
   name = "group-3-ecs-cluster-netflix-clone"
-
-  lifecycle {
-    ignore_changes = [name]
-  }
 }
 
 resource "aws_ecs_task_definition" "netflix_clone_task" {
@@ -111,11 +111,11 @@ resource "aws_ecs_task_definition" "netflix_clone_task" {
   requires_compatibilities = ["FARGATE"]
   cpu                      = "256"
   memory                   = "512"
-  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+  execution_role_arn       = length(aws_iam_role.ecs_task_execution_role) > 0 ? aws_iam_role.ecs_task_execution_role[0].arn : data.aws_iam_role.existing_ecs_task_execution_role.arn
 
   container_definitions = jsonencode([{
     name  = "netflix-clone"
-    image = "${aws_ecr_repository.netflix_clone.repository_url}:latest"
+    image = length(aws_ecr_repository.netflix_clone) > 0 ? "${aws_ecr_repository.netflix_clone[0].repository_url}:latest" : "${data.aws_ecr_repository.existing_netflix_clone.repository_url}:latest"
     essential = true
 
     portMappings = [{
@@ -128,10 +128,6 @@ resource "aws_ecs_task_definition" "netflix_clone_task" {
       value = var.tmdb_api_key
     }]
   }])
-
-  lifecycle {
-    ignore_changes = [family]
-  }
 }
 
 resource "aws_ecs_service" "netflix_clone_service" {
@@ -145,14 +141,18 @@ resource "aws_ecs_service" "netflix_clone_service" {
     subnets         = [aws_subnet.netflix_clone_subnet.id]
     assign_public_ip = true
   }
-
-  lifecycle {
-    ignore_changes = [name]
-  }
 }
 
 output "ecr_repository_url" {
-  value = aws_ecr_repository.netflix_clone.repository_url
+  value = length(aws_ecr_repository.netflix_clone) > 0 ? aws_ecr_repository.netflix_clone[0].repository_url : data.aws_ecr_repository.existing_netflix_clone.repository_url
+}
+```
+
+### Updated terraform/outputs.tf
+
+```hcl
+output "ecr_repository_url" {
+  value = length(aws_ecr_repository.netflix_clone) > 0 ? aws_ecr_repository.netflix_clone[0].repository_url : data.aws_ecr_repository.existing_netflix_clone.repository_url
 }
 ```
 
@@ -244,7 +244,9 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_REGION: ${{ secrets.AWS_REGION }}
         TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
-        TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
+        TF_VAR_aws_region: ${{ secrets.AWS_REGION
+
+ }}
       run: |
         cd terraform
         terraform init
@@ -288,9 +290,7 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_REGION: ${{ secrets.AWS_REGION }}
-        TF_VAR_tmdb_api_key: ${{
-
- secrets.TMDB_API_KEY }}
+        TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
         TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
       run: |
         cd terraform
@@ -387,7 +387,7 @@ variable "tmdb_api_key" {
 
 ```hcl
 output "ecr_repository_url" {
-  value = aws_ecr_repository.netflix_clone.repository_url
+  value = length(aws_ecr_repository.netflix_clone) > 0 ? aws_ecr_repository.netflix_clone[0].repository_url : data.aws_ecr_repository.existing_netflix_clone.repository_url
 }
 ```
 
@@ -421,6 +421,13 @@ spec:
             secretKeyRef:
               name: tmdb-api-key-secret
               key: TMDB_API_KEY
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
       restartPolicy: Always
 ---
 apiVersion: v1
@@ -541,7 +548,9 @@ Secrets required for the CI/CD pipeline are stored in GitHub Secrets:
 
 ### Create the TMDB API Key Secret
 
-Before deploying the application, ensure the TMDB API key secret is created in the Kubernetes cluster.
+Before deploying the application, ensure the TMDB API key secret
+
+ is created in the Kubernetes cluster.
 
 ```sh
 kubectl create secret generic tmdb-api-key-secret --from-literal=TMDB_API_KEY=<YOUR_TMDB_API_KEY>
@@ -599,9 +608,7 @@ Set the required environment variables in GitHub Secrets.
 
 ### Trigger CI/CD Pipeline
 
-Push changes to the repository or create a pull
-
- request to trigger the CI/CD pipeline.
+Push changes to the repository or create a pull request to trigger the CI/CD pipeline.
 
 ### Destroy Infrastructure
 

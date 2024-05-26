@@ -108,7 +108,7 @@ resource "aws_ecs_task_definition" "netflix_clone_task" {
 
   container_definitions = jsonencode([{
     name  = "netflix-clone"
-    image = "${data.aws_ecr_repository.existing_netflix_clone.repository_url}:latest"
+    image = length(aws_ecr_repository.netflix_clone) > 0 ? "${aws_ecr_repository.netflix_clone[0].repository_url}:latest" : "${data.aws_ecr_repository.existing_netflix_clone.repository_url}:latest"
     essential = true
 
     portMappings = [{
@@ -135,3 +135,4 @@ resource "aws_ecs_service" "netflix_clone_service" {
     assign_public_ip = true
   }
 }
+
