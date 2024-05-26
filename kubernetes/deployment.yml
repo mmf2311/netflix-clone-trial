@@ -15,29 +15,18 @@ spec:
         app: netflix-clone
     spec:
       containers:
-      - name: netflix-clone
-        image: <YOUR_AWS_ACCOUNT_ID>.dkr.ecr.<YOUR_AWS_REGION>.amazonaws.com/group-3-ecr-netflix-clone:latest
-        ports:
-        - containerPort: 5000
-        env:
-        - name: TMDB_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: tmdb-api-key-secret
-              key: TMDB_API_KEY
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
+        - name: netflix-clone
+          image: <YOUR_AWS_ACCOUNT_ID>.dkr.ecr.<YOUR_AWS_REGION>.amazonaws.com/group-3-ecr-netflix-clone:latest
+          ports:
+            - containerPort: 5000
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          env:
+            - name: TMDB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: tmdb-api-key-secret
+                  key: TMDB_API_KEY
       restartPolicy: Always
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: tmdb-api-key-secret
-type: Opaque
-stringData:
-  TMDB_API_KEY: "<YOUR_TMDB_API_KEY>"

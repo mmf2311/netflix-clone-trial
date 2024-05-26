@@ -183,11 +183,3 @@ resource "aws_api_gateway_deployment" "netflix_clone_deployment" {
   rest_api_id = aws_api_gateway_rest_api.netflix_clone_api.id
   stage_name  = "prod"
 }
-
-output "ecr_repository_url" {
-  value = length(aws_ecr_repository.netflix_clone) > 0 ? aws_ecr_repository.netflix_clone[0].repository_url : data.aws_ecr_repository.existing_netflix_clone.repository_url
-}
-
-output "api_gateway_url" {
-  value = aws_api_gateway_deployment.netflix_clone_deployment.invoke_url
-}
