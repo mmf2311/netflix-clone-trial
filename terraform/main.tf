@@ -123,7 +123,14 @@ resource "aws_ecs_task_definition" "netflix_clone_task" {
   }])
 }
 
+# Check for existing ECS Service
+data "aws_ecs_service" "existing_service" {
+  cluster_arn  = aws_ecs_cluster.netflix_clone_cluster.arn
+  service_name = "group-3-ecs-service-netflix-clone"
+}
+
 resource "aws_ecs_service" "netflix_clone_service" {
+  count = length(data.aws_ecs_service.existing_service.arn) == 0 ? 1 : 0
   name             = "group-3-ecs-service-netflix-clone"
   cluster          = aws_ecs_cluster.netflix_clone_cluster.id
   task_definition  = aws_ecs_task_definition.netflix_clone_task.arn
@@ -144,5 +151,4 @@ resource "aws_ecs_service" "netflix_clone_service" {
 
   depends_on = [aws_ecs_task_definition.netflix_clone_task]
 }
-
 
