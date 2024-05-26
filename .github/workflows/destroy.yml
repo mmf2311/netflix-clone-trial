@@ -26,3 +26,7 @@ jobs:
       run: |
         cd terraform
         terraform destroy -auto-approve
+
+    - name: Delete ECR repository
+      run: |
+        aws ecr delete-repository --repository-name group-3-ecr-netflix-clone --region ${{ secrets.AWS_REGION }} --force
