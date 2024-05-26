@@ -1,3 +1,4 @@
+
 locals {
   timestamp = formatdate("YYYYMMDD-HHMMSS", timestamp())
 }
@@ -123,7 +124,7 @@ resource "aws_ecs_service" "netflix_clone_service" {
   }
 
   depends_on = [
-    aws_iam_policy_attachment.ecs_task_execution_policy,
+    aws_iam_role_policy_attachment.ecs_task_execution_policy,
     aws_ecr_repository.netflix_clone,
     aws_ecs_task_definition.netflix_clone_task,
   ]
