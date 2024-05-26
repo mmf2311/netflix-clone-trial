@@ -26,7 +26,7 @@ jobs:
     - name: Destroy EKS Cluster
       run: |
         CLUSTER_NAME="group-3-eks-netflix-clone-${{ github.event.inputs.branch }}"
-        if aws eks describe-cluster --name $CLUSTER_NAME &>/dev/null; then
+        if aws eks list-clusters --query "clusters[?contains(@, '${CLUSTER_NAME}')]" --output text | grep -q "${CLUSTER_NAME}"; then
           aws eks delete-cluster --name $CLUSTER_NAME
         else
           echo "EKS Cluster $CLUSTER_NAME does not exist. Skipping deletion."
@@ -35,7 +35,7 @@ jobs:
     - name: Delete ECR Repository
       run: |
         REPO_NAME="group-3-ecr-netflix-clone-${{ github.event.inputs.branch }}"
-        if aws ecr describe-repositories --repository-names $REPO_NAME &>/dev/null; then
+        if aws ecr describe-repositories --query "repositories[?contains(repositoryName, '${REPO_NAME}')]" --output text | grep -q "${REPO_NAME}"; then
           aws ecr delete-repository --repository-name $REPO_NAME --force
         else
           echo "ECR Repository $REPO_NAME does not exist. Skipping deletion."
@@ -56,7 +56,7 @@ jobs:
     - name: Delete ECS Cluster
       run: |
         CLUSTER_NAME="group-3-ecs-cluster-netflix-clone-${{ github.event.inputs.branch }}"
-        if aws ecs describe-clusters --clusters $CLUSTER_NAME --query "clusters[0].clusterArn" --output text &>/dev/null; then
+        if aws ecs list-clusters --query "clusterArns[?contains(@, '${CLUSTER_NAME}')]" --output text | grep -q "${CLUSTER_NAME}"; then
           aws ecs delete-cluster --cluster $CLUSTER_NAME
         else
           echo "ECS Cluster $CLUSTER_NAME does not exist. Skipping deletion."
@@ -121,5 +121,53 @@ jobs:
           for VPC_ID in $VPC_IDS; do
             echo "Deleting VPC: $VPC_ID"
             aws ec2 delete-vpc --vpc-id $VPC_ID || echo "Error deleting VPC $VPC_ID. There might be dependencies that need to be deleted first."
+          done
+        fi
+
+    - name: Delete Security Groups
+      run: |
+        SG_IDS=$(aws ec2 describe-security-groups --filters "Name=tag:Name,Values=group-3-sg-netflix-clone-${{ github.event.inputs.branch }}-*" --query "SecurityGroups[].GroupId" --output text)
+        if [ -z "$SG_IDS" ]; then
+          echo "No Security Groups found for deletion. Skipping."
+        else
+          for SG_ID in $SG_IDS; do
+            echo "Deleting Security Group: $SG_ID"
+            aws ec2 delete-security-group --group-id $SG_ID || echo "Error deleting Security Group $SG_ID. There might be dependencies that need to be deleted first."
+          done
+        fi
+
+    - name: Delete Key Pairs
+      run: |
+        KEY_PAIR_NAMES=$(aws ec2 describe-key-pairs --query "KeyPairs[?contains(KeyName, 'group-3-key-netflix-clone-${{ github.event.inputs.branch }}')].KeyName" --output text)
+        if [ -z "$KEY_PAIR_NAMES" ]; then
+          echo "No Key Pairs found for deletion. Skipping."
+        else
+          for KEY_PAIR_NAME in $KEY_PAIR_NAMES; do
+            echo "Deleting Key Pair: $KEY_PAIR_NAME"
+            aws ec2 delete-key-pair --key-name $KEY_PAIR_NAME
+          done
+        fi
+
+    - name: Delete S3 Buckets
+      run: |
+        BUCKET_NAMES=$(aws s3api list-buckets --query "Buckets[?contains(Name, 'group-3-s3-netflix-clone-${{ github.event.inputs.branch }}')].Name" --output text)
+        if [ -z "$BUCKET_NAMES" ]; then
+          echo "No S3 Buckets found for deletion. Skipping."
+        else
+          for BUCKET_NAME in $BUCKET_NAMES; do
+            echo "Deleting S3 Bucket: $BUCKET_NAME"
+            aws s3 rb s3://$BUCKET_NAME --force
+          done
+        fi
+
+    - name: Delete RDS Instances
+      run: |
+        DB_INSTANCE_IDENTIFIERS=$(aws rds describe-db-instances --query "DBInstances[?contains(DBInstanceIdentifier, 'group-3-rds-netflix-clone-${{ github.event.inputs.branch }}')].DBInstanceIdentifier" --output text)
+        if [ -z "$DB_INSTANCE_IDENTIFIERS" ]; then
+          echo "No RDS Instances found for deletion. Skipping."
+        else
+          for DB_INSTANCE_IDENTIFIER in $DB_INSTANCE_IDENTIFIERS; do
+            echo "Deleting RDS Instance: $DB_INSTANCE_IDENTIFIER"
+            aws rds delete-db-instance --db-instance-identifier $DB_INSTANCE_IDENTIFIER --skip-final-snapshot
           done
         fi
