@@ -7,7 +7,7 @@ data "aws_ecr_repository" "existing" {
 }
 
 resource "aws_iam_role" "ecs_task_execution_role" {
-  name = "group-3-ecsTaskExecutionRole-${random_id.random.hex}"
+  name = "group-3-ecsTaskExecutionRole"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -21,10 +21,6 @@ resource "aws_iam_role" "ecs_task_execution_role" {
       }
     ]
   })
-}
-
-resource "random_id" "random" {
-  byte_length = 4
 }
 
 resource "aws_iam_policy_attachment" "ecs_task_execution_policy" {
@@ -80,8 +76,4 @@ resource "aws_ecs_service" "netflix_clone_service" {
     subnets         = ["subnet-0123456789abcdef0"]
     assign_public_ip = true
   }
-}
-
-output "ecr_repository_url" {
-  value = data.aws_ecr_repository.existing.repository_url
 }

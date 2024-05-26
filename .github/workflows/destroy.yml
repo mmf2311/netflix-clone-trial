@@ -31,4 +31,11 @@ jobs:
 
     - name: Delete ECR repository
       run: |
-        aws ecr delete-repository --repository-name group-3-ecr-netflix-clone --region ${{ secrets.AWS_REGION }} --force
+        aws ecr describe-repositories --repository-names group-3-ecr-netflix-clone --region ${{ secrets.AWS_REGION }} && \
+        aws ecr delete-repository --repository-name group-3-ecr-netflix-clone --region ${{ secrets.AWS_REGION }} --force || \
+        echo "Repository group-3-ecr-netflix-clone does not exist or already deleted"
+
+    - name: Delete IAM Role
+      run: |
+        aws iam delete-role-policy --role-name group-3-ecsTaskExecutionRole --policy-name ecs-task-execution-policy-attachment || true
+        aws iam delete-role --role-name group-3-ecsTaskExecutionRole || true
