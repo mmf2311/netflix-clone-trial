@@ -120,6 +120,6 @@ jobs:
         else
           for VPC_ID in $VPC_IDS; do
             echo "Deleting VPC: $VPC_ID"
-            aws ec2 delete-vpc --vpc-id $VPC_ID
+            aws ec2 delete-vpc --vpc-id $VPC_ID || echo "Error deleting VPC $VPC_ID. There might be dependencies that need to be deleted first."
           done
         fi
