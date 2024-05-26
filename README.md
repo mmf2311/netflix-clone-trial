@@ -1,6 +1,33 @@
-The error you're seeing is because the inputs provided to the `aws-actions/amazon-ecr-login@v1` action are incorrect. Instead of `access-key-id` and `secret-access-key`, you should use `aws-access-key-id` and `aws-secret-access-key`. Here is the corrected code for the `ci-cd.yml` workflow:
+Sure! Below is the updated full code, including all necessary files and documentation, with the repository structure clearly defined.
 
-### Corrected .github/workflows/ci-cd.yml
+### Repository Structure
+```
+netflix-clone/
+├── .github/
+│   └── workflows/
+│       ├── ci-cd.yml
+│       └── destroy.yml
+├── backend/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── src/
+│       ├── main.py
+│       └── utils.py
+├── terraform/
+│   ├── main.tf
+│   ├── variables.tf
+│   └── outputs.tf
+├── kubernetes/
+│   ├── deployment.yml
+│   └── service.yml
+└── docs/
+    ├── architecture.md
+    ├── setup.md
+    └── user_experience.md
+└── README.md
+```
+
+### .github/workflows/ci-cd.yml
 ```yaml
 name: CI/CD Pipeline
 
@@ -25,24 +52,34 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1
 
-    - name: Log in to Amazon ECR
-      uses: aws-actions/amazon-ecr-login@v1
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v1
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ secrets.AWS_REGION }}
 
+    - name: Log in to Amazon ECR
+      run: |
+        aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+
+    - name: Create ECR repository if it does not exist
+      run: |
+        aws ecr describe-repositories --repository-names group-3-ecr-netflix-clone --region ${{ secrets.AWS_REGION }} || aws ecr create-repository --repository-name group-3-ecr-netflix-clone --region ${{ secrets.AWS_REGION }}
+
+    - name: List backend directory contents
+      run: ls -R backend
+
     - name: Build and push Docker image
       uses: docker/build-push-action@v2
       with:
-        context: .
-        file: ./backend/Dockerfile
+        context: backend
+        file: backend/Dockerfile
         push: true
         tags: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-ecr-netflix-clone:latest
 
     - name: Deploy to ECR
       run: |
-        aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
         docker tag netflix-clone:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-ecr-netflix-clone:latest
         docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-ecr-netflix-clone:latest
 
@@ -62,7 +99,7 @@ jobs:
         kubectl apply -f kubernetes/service.yml
 ```
 
-### Updated .github/workflows/destroy.yml
+### .github/workflows/destroy.yml
 ```yaml
 name: Destroy Infrastructure
 
@@ -77,6 +114,13 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
 
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
     - name: Terraform Destroy
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -85,11 +129,13 @@ jobs:
       run: |
         cd terraform
         terraform destroy -auto-approve
+
+    - name: Delete ECR repository
+      run: |
+        aws ecr delete-repository --repository-name group-3-ecr-netflix-clone --region ${{ secrets.AWS_REGION }} --force
 ```
 
-### Full Updated Code and Documentation
-
-#### Dockerfile
+### backend/Dockerfile
 ```dockerfile
 FROM python:3.9-slim
 
@@ -103,13 +149,13 @@ COPY src/ /app
 CMD ["python", "main.py"]
 ```
 
-#### requirements.txt
+### backend/requirements.txt
 ```
 Flask==2.0.3
 requests==2.26.0
 ```
 
-#### src/main.py
+### backend/src/main.py
 ```python
 from flask import Flask, jsonify, request
 from utils import get_movie_data
@@ -125,7 +171,7 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
 ```
 
-#### src/utils.py
+### backend/src/utils.py
 ```python
 import os
 import requests
@@ -137,9 +183,7 @@ def get_movie_data(title):
     return response.json()
 ```
 
-### Terraform Code
-
-#### main.tf
+### terraform/main.tf
 ```hcl
 provider "aws" {
   region = var.aws_region
@@ -191,7 +235,7 @@ resource "aws_ecs_service" "netflix_clone_service" {
 }
 ```
 
-#### variables.tf
+### terraform/variables.tf
 ```hcl
 variable "aws_region" {
   description = "The AWS region to deploy to"
@@ -203,16 +247,14 @@ variable "tmdb_api_key" {
 }
 ```
 
-#### outputs.tf
+### terraform/outputs.tf
 ```hcl
 output "ecr_repository_url" {
   value = aws_ecr_repository.netflix_clone.repository_url
 }
 ```
 
-### Kubernetes Config
-
-#### deployment.yml
+### kubernetes/deployment.yml
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -248,7 +290,7 @@ spec:
             cpu: "500m"
 ```
 
-#### service.yml
+### kubernetes/service.yml
 ```yaml
 apiVersion: v1
 kind: Service
@@ -263,15 +305,15 @@ spec:
     targetPort: 5000
 ```
 
-### Documentation
-
-#### docs/architecture.md
+### docs/architecture.md
 ```markdown
 # Network Architecture
 
 The architecture consists of the following components:
 
-- **Users**: End users interact with the application through a web interface.
+- **Users**:
+
+ End users interact with the application through a web interface.
 - **Route 53**: AWS Route 53 is used for DNS management, directing user traffic to the appropriate endpoints.
 - **API Gateway**: AWS API Gateway handles the routing and exposure of RESTful APIs created by AWS Lambda functions.
 - **Lambda**: AWS Lambda functions execute the backend logic in a serverless environment, handling requests and interacting with other AWS services.
@@ -283,9 +325,7 @@ The architecture consists of the following components:
 - **ECR**: AWS Elastic Container Registry (ECR) is used to store and manage Docker images.
 - **ECS**: AWS Elastic Container Service (ECS) is used to run containerized applications. It works with EC2 to provide scalable compute capacity.
 - **EC2**: AWS EC2 instances provide the underlying compute capacity for running the ECS cluster and other resources.
-- **Kubernetes**: Kubernetes is used for container orchestration, managing the deployment, scaling,
-
- and operations of containerized applications.
+- **Kubernetes**: Kubernetes is used for container orchestration, managing the deployment, scaling, and operations of containerized applications.
 - **Terraform**: Terraform is used for managing infrastructure as code, automating the setup and configuration of all the necessary AWS resources.
 
 ### Detailed Architecture Diagram
@@ -354,7 +394,7 @@ The architecture consists of the following components:
                   +------------+
 ```
 
-#### docs/setup.md
+### docs/setup.md
 ```markdown
 # Setup Instructions
 
@@ -413,7 +453,7 @@ Ensure the following secrets are added to your GitHub repository:
 - `TMDB_API_KEY`
 ```
 
-#### docs/user_experience.md
+### docs/user_experience.md
 ```markdown
 # User Experience Overview
 
@@ -532,7 +572,9 @@ This project is a Netflix clone application built using GitHub Actions, AWS reso
 2. [Project Overview](#project-overview)
 3. [Features](#features)
 4. [User Experience](#user-experience)
-5. [Project Structure](#project-structure)
+5. [Project
+
+ Structure](#project-structure)
 6. [Versioning](#versioning)
 7. [Requirements and Fulfillment](#requirements-and-fulfillment)
 8. [Getting Started](#getting-started)
@@ -573,9 +615,7 @@ For a detailed overview of the user experience, refer to the [User Experience Ov
   - `destroy.yml`: Workflow to destroy all AWS resources
 - `backend`: Backend application source code and Dockerfile
   - `src`: Source code directory
-    - `main.py`: Main application
-
- file
+    - `main.py`: Main application file
     - `utils.py`: Utility functions
 - `terraform`: Terraform scripts for infrastructure as code
   - `main.tf`: Main Terraform configuration
@@ -715,6 +755,8 @@ The CI/CD pipeline is managed using GitHub Actions and includes the following wo
 - Destroys all resources created in AWS.
 1. **Terraform Destroy**:
    - Destroys all infrastructure resources created by Terraform.
+2. **Delete ECR Repository**:
+   - Deletes the ECR repository to ensure all Docker images and the repository itself are removed.
 
 ## Network Architecture
 
@@ -764,7 +806,9 @@ The architecture consists of the following components:
     +------+-----+            +------+-----+  +------+-----+            +------+-----+
     |  DynamoDB  |            |  SQS Queue |  |  SNS Topic |            |  DynamoDB  |
     +------------+            +------------+  +------------+            +------------+
-                        |
+                       
+
+ |
                         |
                   +-----+------+
                   |  TMDB API  |
@@ -829,10 +873,4 @@ To contribute to this project:
 This project is licensed under the MIT License.
 ```
 
-This README file and code structure
-
- include all the necessary details, including a detailed network architecture diagram, explanations, full code for each file, and a user experience overview document. If you encounter any further issues or need additional adjustments, please let me know!
-
- testtest
-
- 
+This README file and code structure include all the necessary details, including a detailed network architecture diagram, explanations, full code for each file, and a user experience overview document. If you encounter any further issues or need additional adjustments, please let me know!
