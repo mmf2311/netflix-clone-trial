@@ -79,7 +79,7 @@ resource "aws_iam_policy_attachment" "ecs_task_execution_policy" {
 
   name       = "ecs-task-execution-policy-attachment"
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-  roles      = aws_iam_role.ecs_task_execution_role.count > 0 ? [aws_iam_role.ecs_task_execution_role[0].name] : [data.aws_iam_role.existing_ecs_task_execution_role.name]
+  roles      = length(aws_iam_role.ecs_task_execution_role) > 0 ? [aws_iam_role.ecs_task_execution_role[0].name] : [data.aws_iam_role.existing_ecs_task_execution_role.name]
 }
 
 # Check for existing ECR repository
@@ -104,7 +104,7 @@ resource "aws_ecs_task_definition" "netflix_clone_task" {
   requires_compatibilities = ["FARGATE"]
   cpu                      = "256"
   memory                   = "512"
-  execution_role_arn       = aws_iam_role.ecs_task_execution_role.count > 0 ? aws_iam_role.ecs_task_execution_role[0].arn : data.aws_iam_role.existing_ecs_task_execution_role.arn
+  execution_role_arn       = length(aws_iam_role.ecs_task_execution_role) > 0 ? aws_iam_role.ecs_task_execution_role[0].arn : data.aws_iam_role.existing_ecs_task_execution_role.arn
 
   container_definitions = jsonencode([{
     name  = "netflix-clone"
@@ -135,4 +135,3 @@ resource "aws_ecs_service" "netflix_clone_service" {
     assign_public_ip = true
   }
 }
-
