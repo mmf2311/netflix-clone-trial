@@ -1,3 +1,5 @@
+data "aws_caller_identity" "current" {}
+
 resource "aws_ecr_repository" "netflix_clone" {
   name = "group-3-ecr-netflix-clone"
 }
@@ -102,3 +104,5 @@ resource "aws_ecs_service" "netflix_clone_service" {
   }
   depends_on = [aws_ecs_task_definition.netflix_clone_task]
 }
+
+

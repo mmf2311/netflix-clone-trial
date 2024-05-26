@@ -1,15 +1,17 @@
-from flask import Flask, jsonify
-import requests
+from flask import Flask, jsonify, request
 import os
+from utils import get_movie_data
 
 app = Flask(__name__)
 
-TMDB_API_KEY = os.getenv("TMDB_API_KEY")
-
-@app.route('/movies', methods=['GET'])
+@app.route('/movies')
 def get_movies():
-    response = requests.get(f'https://api.themoviedb.org/3/movie/popular?api_key={TMDB_API_KEY}')
-    return jsonify(response.json())
+    title = request.args.get('title')
+    if title:
+        data = get_movie_data(title)
+    else:
+        data = {"error": "Please provide a movie title."}
+    return jsonify(data)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
