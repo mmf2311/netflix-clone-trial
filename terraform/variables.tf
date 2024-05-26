@@ -5,3 +5,8 @@ variable "aws_region" {
 variable "tmdb_api_key" {
   description = "Your TMDB API key"
 }
+
+variable "timestamp" {
+  description = "Timestamp for unique naming"
+  default     = formatdate("YYYYMMDD-HHMMSS", timestamp())
+}
