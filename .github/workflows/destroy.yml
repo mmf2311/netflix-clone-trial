@@ -34,9 +34,9 @@ jobs:
 
     - name: Delete ECR Repository
       run: |
-        REPO_NAME="group-3-ecr-netflix-clone-${{ github.event.inputs.branch }}-*"
+        REPO_NAME="group-3-ecr-netflix-clone-${{ github.event.inputs.branch }}"
         if aws ecr describe-repositories --repository-names $REPO_NAME &>/dev/null; then
-          aws ecr describe-repositories --query "repositories[?repositoryName=='$REPO_NAME'].repositoryName" --output text | xargs -I {} aws ecr delete-repository --repository-name {} --force
+          aws ecr delete-repository --repository-name $REPO_NAME --force
         else
           echo "ECR Repository $REPO_NAME does not exist. Skipping deletion."
         fi
