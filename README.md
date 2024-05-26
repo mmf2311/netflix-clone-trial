@@ -1,164 +1,6 @@
-The issue occurs because Terraform cannot find the `aws_ecr_repository.netflix_clone` resource when it tries to output its URL. This is likely because the condition for creating the repository (`count` attribute) results in no resources being created, and thus the resource collection is empty.
+Sure, here's the complete set of updated files, the repository structure, and the README.md file for your record:
 
-To fix this, we need to ensure that the ECR repository is either created or fetched correctly. Here’s an improved approach:
-
-### Updated terraform/main.tf
-
-```hcl
-provider "aws" {
-  region = var.aws_region
-}
-
-# New VPC Resource
-resource "aws_vpc" "netflix_clone_vpc" {
-  cidr_block = "10.0.0.0/16"
-  tags = {
-    Name = "group-3-vpc-netflix-clone"
-  }
-}
-
-# New Subnet Resource
-resource "aws_subnet" "netflix_clone_subnet" {
-  vpc_id                  = aws_vpc.netflix_clone_vpc.id
-  cidr_block              = "10.0.1.0/24"
-  availability_zone       = "us-east-1a"
-  map_public_ip_on_launch = true
-  tags = {
-    Name = "group-3-subnet-netflix-clone"
-  }
-}
-
-# Internet Gateway
-resource "aws_internet_gateway" "netflix_clone_igw" {
-  vpc_id = aws_vpc.netflix_clone_vpc.id
-  tags = {
-    Name = "group-3-igw-netflix-clone"
-  }
-}
-
-# Route Table
-resource "aws_route_table" "netflix_clone_route_table" {
-  vpc_id = aws_vpc.netflix_clone_vpc.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.netflix_clone_igw.id
-  }
-
-  tags = {
-    Name = "group-3-rt-netflix-clone"
-  }
-}
-
-# Route Table Association
-resource "aws_route_table_association" "netflix_clone_route_table_association" {
-  subnet_id      = aws_subnet.netflix_clone_subnet.id
-  route_table_id = aws_route_table.netflix_clone_route_table.id
-}
-
-# Check for existing IAM Role
-data "aws_iam_role" "existing_ecs_task_execution_role" {
-  name = "group-3-ecsTaskExecutionRole"
-}
-
-# IAM Role and Policy for ECS Task Execution
-resource "aws_iam_role" "ecs_task_execution_role" {
-  count = length(data.aws_iam_role.existing_ecs_task_execution_role.arn) == 0 ? 1 : 0
-
-  name = "group-3-ecsTaskExecutionRole"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "ecs-tasks.amazonaws.com"
-        }
-        Action = "sts:AssumeRole"
-      }
-    ]
-  })
-}
-
-resource "aws_iam_policy_attachment" "ecs_task_execution_policy" {
-  depends_on = [aws_iam_role.ecs_task_execution_role]
-
-  name       = "ecs-task-execution-policy-attachment"
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-  roles      = length(aws_iam_role.ecs_task_execution_role) > 0 ? [aws_iam_role.ecs_task_execution_role[0].name] : [data.aws_iam_role.existing_ecs_task_execution_role.name]
-}
-
-# Check for existing ECR repository
-data "aws_ecr_repository" "existing_netflix_clone" {
-  name = "group-3-ecr-netflix-clone"
-}
-
-resource "aws_ecr_repository" "netflix_clone" {
-  count = length(data.aws_ecr_repository.existing_netflix_clone.repository_url) == 0 ? 1 : 0
-
-  name                 = "group-3-ecr-netflix-clone"
-  image_tag_mutability = "MUTABLE"
-}
-
-resource "aws_ecs_cluster" "netflix_clone_cluster" {
-  name = "group-3-ecs-cluster-netflix-clone"
-}
-
-resource "aws_ecs_task_definition" "netflix_clone_task" {
-  family                   = "group-3-ecs-task-netflix-clone"
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
-  cpu                      = "256"
-  memory                   = "512"
-  execution_role_arn       = length(aws_iam_role.ecs_task_execution_role) > 0 ? aws_iam_role.ecs_task_execution_role[0].arn : data.aws_iam_role.existing_ecs_task_execution_role.arn
-
-  container_definitions = jsonencode([{
-    name  = "netflix-clone"
-    image = length(aws_ecr_repository.netflix_clone) > 0 ? "${aws_ecr_repository.netflix_clone[0].repository_url}:latest" : "${data.aws_ecr_repository.existing_netflix_clone.repository_url}:latest"
-    essential = true
-
-    portMappings = [{
-      containerPort = 5000
-      hostPort      = 5000
-    }]
-
-    environment = [{
-      name  = "TMDB_API_KEY"
-      value = var.tmdb_api_key
-    }]
-  }])
-}
-
-resource "aws_ecs_service" "netflix_clone_service" {
-  name            = "group-3-ecs-service-netflix-clone"
-  cluster         = aws_ecs_cluster.netflix_clone_cluster.id
-  task_definition = aws_ecs_task_definition.netflix_clone_task.arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
-
-  network_configuration {
-    subnets         = [aws_subnet.netflix_clone_subnet.id]
-    assign_public_ip = true
-  }
-}
-
-output "ecr_repository_url" {
-  value = length(aws_ecr_repository.netflix_clone) > 0 ? aws_ecr_repository.netflix_clone[0].repository_url : data.aws_ecr_repository.existing_netflix_clone.repository_url
-}
-```
-
-### Updated terraform/outputs.tf
-
-```hcl
-output "ecr_repository_url" {
-  value = length(aws_ecr_repository.netflix_clone) > 0 ? aws_ecr_repository.netflix_clone[0].repository_url : data.aws_ecr_repository.existing_netflix_clone.repository_url
-}
-```
-
-### Full Repository Structure
-
-Here is the updated complete repository structure with all necessary files:
+### Updated Repository Structure
 
 ```
 netflix-clone/
@@ -244,13 +86,22 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_REGION: ${{ secrets.AWS_REGION }}
         TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
-        TF_VAR_aws_region: ${{ secrets.AWS_REGION
-
- }}
+        TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
       run: |
         cd terraform
         terraform init
         terraform apply -auto-approve
+
+    - name: Set up Kubernetes
+      uses: azure/setup-kubectl@v1
+      with:
+        version: 'latest'
+
+    - name: Configure Kubernetes context
+      env:
+        KUBECONFIG: ${{ secrets.KUBECONFIG }}
+      run: |
+        echo "${{ secrets.KUBECONFIG }}" | base64 --decode > $HOME/.kube/config
 
     - name: Deploy to Kubernetes
       env:
@@ -369,6 +220,168 @@ def get_movie_data(title):
     url = f'https://api.themoviedb.org/3/search/movie?api_key={api_key}&query={title}'
     response = requests.get(url)
     return response.json()
+```
+
+### terraform/main.tf
+
+```hcl
+provider "aws" {
+  region = var.aws_region
+}
+
+# New VPC Resource
+resource "aws_vpc" "netflix_clone_vpc" {
+  cidr_block = "10.0.0.0/16"
+  tags = {
+    Name = "group-3-vpc-netflix-clone"
+  }
+}
+
+# New Subnet Resource
+resource "aws_subnet" "netflix_clone_subnet" {
+  vpc_id                  = aws_vpc.netflix_clone_vpc.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "us-east-1a"
+  map_public_ip_on_launch = true
+  tags = {
+    Name = "group-3-subnet-netflix-clone"
+  }
+}
+
+# Internet Gateway
+resource "aws_internet_gateway" "netflix_clone_igw" {
+  vpc_id = aws_vpc.netflix_clone_vpc.id
+  tags = {
+    Name = "group-3-igw-netflix-clone"
+  }
+}
+
+# Route Table
+resource "aws_route_table" "netflix_clone_route_table" {
+  vpc_id = aws_vpc.netflix_clone_vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.netflix_clone_igw.id
+  }
+
+  tags = {
+    Name = "group-3-rt-netflix-clone"
+  }
+}
+
+# Route Table Association
+resource "aws_route_table_association" "netflix_clone_route_table_association" {
+  subnet_id      = aws_subnet.netflix_clone_subnet.id
+  route_table_id = aws_route_table.netflix_clone_route_table.id
+}
+
+# Check for existing IAM Role
+data "aws_iam_role" "existing_ecs_task_execution_role" {
+  name = "group-3-ecsTaskExecutionRole"
+}
+
+# IAM Role and Policy for ECS Task Execution
+resource "aws_iam_role" "ecs_task_execution_role
+
+" {
+  count = length(data.aws_iam_role.existing_ecs_task_execution_role.arn) == 0 ? 1 : 0
+
+  name = "group-3-ecsTaskExecutionRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_policy_attachment" "ecs_task_execution_policy" {
+  depends_on = [aws_iam_role.ecs_task_execution_role]
+
+  name       = "ecs-task-execution-policy-attachment"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+  roles      = length(aws_iam_role.ecs_task_execution_role) > 0 ? [aws_iam_role.ecs_task_execution_role[0].name] : [data.aws_iam_role.existing_ecs_task_execution_role.name]
+}
+
+# Check for existing ECR repository
+data "aws_ecr_repository" "existing_netflix_clone" {
+  name = "group-3-ecr-netflix-clone"
+}
+
+resource "aws_ecr_repository" "netflix_clone" {
+  count = length(data.aws_ecr_repository.existing_netflix_clone.repository_url) == 0 ? 1 : 0
+
+  name                 = "group-3-ecr-netflix-clone"
+  image_tag_mutability = "MUTABLE"
+}
+
+resource "aws_ecs_cluster" "netflix_clone_cluster" {
+  name = "group-3-ecs-cluster-netflix-clone"
+}
+
+resource "aws_ecs_task_definition" "netflix_clone_task" {
+  family                   = "group-3-ecs-task-netflix-clone"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = "256"
+  memory                   = "512"
+  execution_role_arn       = length(aws_iam_role.ecs_task_execution_role) > 0 ? aws_iam_role.ecs_task_execution_role[0].arn : data.aws_iam_role.existing_ecs_task_execution_role.arn
+
+  container_definitions = jsonencode([{
+    name  = "netflix-clone"
+    image = length(aws_ecr_repository.netflix_clone) > 0 ? "${aws_ecr_repository.netflix_clone[0].repository_url}:latest" : "${data.aws_ecr_repository.existing_netflix_clone.repository_url}:latest"
+    essential = true
+
+    portMappings = [{
+      containerPort = 5000
+      hostPort      = 5000
+    }]
+
+    environment = [{
+      name  = "TMDB_API_KEY"
+      value = var.tmdb_api_key
+    }]
+  }])
+}
+
+# Check for existing ECS Service
+data "aws_ecs_service" "existing_service" {
+  cluster = aws_ecs_cluster.netflix_clone_cluster.id
+  name    = "group-3-ecs-service-netflix-clone"
+}
+
+resource "aws_ecs_service" "netflix_clone_service" {
+  count            = length(data.aws_ecs_service.existing_service.id) == 0 ? 1 : 0
+  name             = "group-3-ecs-service-netflix-clone"
+  cluster          = aws_ecs_cluster.netflix_clone_cluster.id
+  task_definition  = aws_ecs_task_definition.netflix_clone_task.arn
+  desired_count    = 1
+  launch_type      = "FARGATE"
+
+  network_configuration {
+    subnets         = [aws_subnet.netflix_clone_subnet.id]
+    assign_public_ip = true
+  }
+
+  lifecycle {
+    ignore_changes = [
+      task_definition,
+      desired_count,
+    ]
+  }
+}
+
+output "ecr_repository_url" {
+  value = length(aws_ecr_repository.netflix_clone) > 0 ? aws_ecr_repository.netflix_clone[0].repository_url : data.aws_ecr_repository.existing_netflix_clone.repository_url
+}
 ```
 
 ### terraform/variables.tf
@@ -540,17 +553,19 @@ The CI/CD pipeline is configured using GitHub Actions with the following steps:
 
 Secrets required for the CI/CD pipeline are stored in GitHub Secrets:
 - `AWS_ACCESS_KEY_ID`
+
+
 - `AWS_SECRET_ACCESS_KEY`
 - `AWS_REGION`
+- `AWS_ACCOUNT_ID`
 - `TMDB_API_KEY`
+- `KUBECONFIG` (Base64 encoded content of your kubeconfig file)
 
 ## Kubernetes Deployment
 
 ### Create the TMDB API Key Secret
 
-Before deploying the application, ensure the TMDB API key secret
-
- is created in the Kubernetes cluster.
+Before deploying the application, ensure the TMDB API key secret is created in the Kubernetes cluster.
 
 ```sh
 kubectl create secret generic tmdb-api-key-secret --from-literal=TMDB_API_KEY=<YOUR_TMDB_API_KEY>
@@ -619,4 +634,4 @@ Trigger the `Destroy Infrastructure` workflow manually from the GitHub Actions t
 This project demonstrates a comprehensive setup for deploying a cloud-native application using modern DevOps practices. The CI/CD pipeline ensures that the application can be reliably and efficiently deployed, while Terraform provides infrastructure as code for reproducibility and scalability.
 ```
 
-Ensure you replace placeholders such as `<YOUR_AWS_ACCOUNT_ID>`, `<YOUR_AWS_REGION>`, and `<YOUR_TMDB_API_KEY>` with actual values. Commit and push these changes to your repository. This setup should provide a comprehensive record of your project.
+Ensure you replace placeholders such as `<YOUR_AWS_ACCOUNT_ID>`, `<YOUR_AWS_REGION>`, and `<YOUR_TMDB_API_KEY>` with actual values. Commit and push these changes to your repository. This setup should provide a comprehensive record of your project and ensure that your CI/CD pipeline can handle idempotent ECS service creation.
