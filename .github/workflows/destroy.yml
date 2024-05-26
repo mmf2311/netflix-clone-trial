@@ -11,7 +11,6 @@ on:
 jobs:
   destroy:
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.branch }}
 
     steps:
     - name: Checkout code
@@ -20,22 +19,22 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v1
       with:
-        aws-region: ${{ secrets.AWS_REGION }}
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
 
-    - name: Terraform Init
+    - name: Destroy EKS Cluster
+      run: |
+        aws eks delete-cluster --name group-3-eks-netflix-clone-${{ github.event.inputs.branch }}
+
+    - name: Delete ECR Repository
+      run: |
+        aws ecr describe-repositories --query "repositories[?repositoryName=='group-3-ecr-netflix-clone-${{ github.event.inputs.branch }}-*'].repositoryName" --output text | xargs -I {} aws ecr delete-repository --repository-name {} --force
+
+    - name: Destroy Terraform Resources
       run: |
         cd terraform
         terraform init
-      env:
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-    - name: Terraform Destroy
-      run: |
-        cd terraform
         terraform destroy -auto-approve -var branch_name=${{ github.event.inputs.branch }}
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -44,67 +43,38 @@ jobs:
         TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
         TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
 
-    - name: Delete ECR repository
+    - name: Delete VPCs
       run: |
-        aws ecr delete-repository --repository-name group-3-ecr-netflix-clone-${{ github.event.inputs.branch }} --force || true
-      env:
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-    - name: Delete VPC
-      run: |
-        aws ec2 describe-vpcs --filters "Name=tag:Name,Values=group-3-vpc-netflix-clone-${{ github.event.inputs.branch }}-*" --query "Vpcs[].VpcId" --output text | xargs -I {} aws ec2 delete-vpc --vpc-id {}
-      env:
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-    - name: Delete EKS cluster
-      run: |
-        aws eks delete-cluster --name group-3-eks-netflix-clone-${{ github.event.inputs.branch }} || true
-      env:
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-    - name: Delete ECS cluster
-      run: |
-        aws ecs delete-cluster --cluster group-3-ecs-cluster-netflix-clone-${{ github.event.inputs.branch }} || true
-      env:
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-    - name: Delete IAM roles
-      run: |
-        aws iam delete-role --role-name group-3-eks-cluster-role-${{ github.event.inputs.branch }} || true
-        aws iam delete-role --role-name group-3-ecsTaskExecutionRole-${{ github.event.inputs.branch }} || true
-      env:
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=group-3-vpc-netflix-clone-${{ github.event.inputs.branch }}-*" --query "Vpcs[].VpcId" --output text)
+        for VPC_ID in $VPC_IDS; do
+          echo "Deleting VPC: $VPC_ID"
+          aws ec2 delete-vpc --vpc-id $VPC_ID
+        done
 
     - name: Delete Subnets
       run: |
-        aws ec2 describe-subnets --filters "Name=tag:Name,Values=group-3-subnet-netflix-clone-${{ github.event.inputs.branch }}-*" --query "Subnets[].SubnetId" --output text | xargs -I {} aws ec2 delete-subnet --subnet-id {}
-      env:
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=group-3-subnet-netflix-clone-${{ github.event.inputs.branch }}-*" --query "Subnets[].SubnetId" --output text)
+        for SUBNET_ID in $SUBNET_IDS; do
+          echo "Deleting Subnet: $SUBNET_ID"
+          aws ec2 delete-subnet --subnet-id $SUBNET_ID
+        done
 
-    - name: Delete Internet Gateway
+    - name: Delete Internet Gateways
       run: |
-        aws ec2 describe-internet-gateways --filters "Name=tag:Name,Values=group-3-igw-netflix-clone-${{ github.event.inputs.branch }}-*" --query "InternetGateways[].InternetGatewayId" --output text | xargs -I {} aws ec2 delete-internet-gateway --internet-gateway-id {}
-      env:
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        IGW_IDS=$(aws ec2 describe-internet-gateways --filters "Name=tag:Name,Values=group-3-igw-netflix-clone-${{ github.event.inputs.branch }}-*" --query "InternetGateways[].InternetGatewayId" --output text)
+        for IGW_ID in $IGW_IDS; do
+          echo "Deleting Internet Gateway: $IGW_ID"
+          aws ec2 delete-internet-gateway --internet-gateway-id $IGW_ID
+        done
 
-    - name: Delete Route Tables
+    - name: Delete ECS Cluster
       run: |
-        aws ec2 describe-route-tables --filters "Name=tag:Name,Values=group-3-rt-netflix-clone-${{ github.event.inputs.branch }}-*" --query "RouteTables[].RouteTableId" --output text | xargs -I {} aws ec2 delete-route-table --route-table-id {}
-      env:
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws ecs delete-cluster --cluster group-3-ecs-cluster-netflix-clone-${{ github.event.inputs.branch }}
+
+    - name: Delete ECS Task Definitions
+      run: |
+        TASK_DEFINITIONS=$(aws ecs list-task-definitions --query "taskDefinitionArns[?contains(@, 'group-3-ecs-task-netflix-clone-${{ github.event.inputs.branch }}')]" --output text)
+        for TASK_DEFINITION in $TASK_DEFINITIONS; do
+          echo "Deregistering Task Definition: $TASK_DEFINITION"
+          aws ecs deregister-task-definition --task-definition $TASK_DEFINITION
+        done
