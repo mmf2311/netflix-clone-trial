@@ -1,9 +1,11 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: group-3-deployment-netflix-clone
+  name: netflix-clone
+  labels:
+    app: netflix-clone
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: netflix-clone
@@ -14,7 +16,7 @@ spec:
     spec:
       containers:
       - name: netflix-clone
-        image: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-ecr-netflix-clone:latest
+        image: <YOUR_AWS_ACCOUNT_ID>.dkr.ecr.<YOUR_AWS_REGION>.amazonaws.com/group-3-ecr-netflix-clone:latest
         ports:
         - containerPort: 5000
         env:
@@ -30,3 +32,12 @@ spec:
           limits:
             memory: "512Mi"
             cpu: "500m"
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tmdb-api-key-secret
+type: Opaque
+stringData:
+  TMDB_API_KEY: "<YOUR_TMDB_API_KEY>"
