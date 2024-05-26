@@ -22,8 +22,8 @@
 3. **Build and Push Docker Image**:
    ```bash
    docker build -t netflix-clone ./backend
-   docker tag netflix-clone:latest <AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com/group-3-ecr-netflix-clone:latest
-   docker push <AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com/group-3-ecr-netflix-clone:latest
+   docker tag netflix-clone:latest <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/group-3-ecr-netflix-clone:latest
+   docker push <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/group-3-ecr-netflix-clone:latest
    ```
 
 4. **Deploy Infrastructure using Terraform**:

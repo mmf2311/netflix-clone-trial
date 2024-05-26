@@ -1,4 +1,28 @@
-Sure! Below is the updated full code, including all necessary files and documentation, with the repository structure clearly defined.
+netflix-clone/
+├── .github/
+│   └── workflows/
+│       ├── ci-cd.yml
+│       └── destroy.yml
+├── backend/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── src/
+│       ├── main.py
+│       └── utils.py
+├── terraform/
+│   ├── main.tf
+│   ├── variables.tf
+│   └── outputs.tf
+├── kubernetes/
+│   ├── deployment.yml
+│   └── service.yml
+└── docs/
+    ├── architecture.md
+    ├── setup.md
+    └── user_experience.md
+└── README.md
+
+Sure! Below is the reviewed code with values directly grabbed from GitHub Action secrets, ensuring that sensitive information is not hard-coded and is securely accessed from GitHub secrets.
 
 ### Repository Structure
 ```
@@ -70,17 +94,16 @@ jobs:
     - name: List backend directory contents
       run: ls -R backend
 
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v2
-      with:
-        context: backend
-        file: backend/Dockerfile
-        push: true
-        tags: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-ecr-netflix-clone:latest
+    - name: Build Docker image
+      run: |
+        docker build -t netflix-clone:latest -f backend/Dockerfile backend
 
-    - name: Deploy to ECR
+    - name: Tag Docker image
       run: |
         docker tag netflix-clone:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-ecr-netflix-clone:latest
+
+    - name: Push Docker image to ECR
+      run: |
         docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-ecr-netflix-clone:latest
 
     - name: Terraform Init and Apply
@@ -88,12 +111,17 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_REGION: ${{ secrets.AWS_REGION }}
+        TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
       run: |
         cd terraform
         terraform init
         terraform apply -auto-approve
 
     - name: Deploy to Kubernetes
+      env:
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+        AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+        TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
       run: |
         kubectl apply -f kubernetes/deployment.yml
         kubectl apply -f kubernetes/service.yml
@@ -126,6 +154,7 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_REGION: ${{ secrets.AWS_REGION }}
+        TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
       run: |
         cd terraform
         terraform destroy -auto-approve
@@ -239,7 +268,6 @@ resource "aws_ecs_service" "netflix_clone_service" {
 ```hcl
 variable "aws_region" {
   description = "The AWS region to deploy to"
-  default     = "us-east-1"
 }
 
 variable "tmdb_api_key" {
@@ -302,6 +330,8 @@ spec:
     app: netflix-clone
   ports:
   - port: 80
+
+
     targetPort: 5000
 ```
 
@@ -311,9 +341,7 @@ spec:
 
 The architecture consists of the following components:
 
-- **Users**:
-
- End users interact with the application through a web interface.
+- **Users**: End users interact with the application through a web interface.
 - **Route 53**: AWS Route 53 is used for DNS management, directing user traffic to the appropriate endpoints.
 - **API Gateway**: AWS API Gateway handles the routing and exposure of RESTful APIs created by AWS Lambda functions.
 - **Lambda**: AWS Lambda functions execute the backend logic in a serverless environment, handling requests and interacting with other AWS services.
@@ -568,13 +596,13 @@ This project is a Netflix clone application built using GitHub Actions, AWS reso
 
 ## Table of Contents
 
-1. [Team Members](#team-members)
+1. [Team Members](#team
+
+-members)
 2. [Project Overview](#project-overview)
 3. [Features](#features)
 4. [User Experience](#user-experience)
-5. [Project
-
- Structure](#project-structure)
+5. [Project Structure](#project-structure)
 6. [Versioning](#versioning)
 7. [Requirements and Fulfillment](#requirements-and-fulfillment)
 8. [Getting Started](#getting-started)
@@ -804,11 +832,11 @@ The architecture consists of the following components:
            +------------+------------+            +------------+------------+
            |                         |            |                         |
     +------+-----+            +------+-----+  +------+-----+            +------+-----+
-    |  DynamoDB  |            |  SQS Queue |  |  SNS Topic |            |  DynamoDB  |
-    +------------+            +------------+  +------------+            +------------+
-                       
+    |  DynamoDB  |           
 
- |
+ |  SQS Queue |  |  SNS Topic |            |  DynamoDB  |
+    +------------+            +------------+  +------------+            +------------+
+                        |
                         |
                   +-----+------+
                   |  TMDB API  |
@@ -873,4 +901,4 @@ To contribute to this project:
 This project is licensed under the MIT License.
 ```
 
-This README file and code structure include all the necessary details, including a detailed network architecture diagram, explanations, full code for each file, and a user experience overview document. If you encounter any further issues or need additional adjustments, please let me know!
+This setup ensures that all sensitive values are securely accessed from GitHub Secrets, and it provides a comprehensive overview of the project, including the necessary configurations and documentation.

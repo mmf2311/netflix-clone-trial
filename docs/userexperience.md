@@ -1,4 +1,3 @@
-
 # User Experience Overview
 
 ## Introduction
