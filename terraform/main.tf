@@ -6,6 +6,29 @@ data "aws_ecr_repository" "existing" {
   name = "group-3-ecr-netflix-clone"
 }
 
+resource "aws_iam_role" "ecs_task_execution_role" {
+  name = "ecsTaskExecutionRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_policy_attachment" "ecs_task_execution_policy" {
+  name       = "ecs-task-execution-policy-attachment"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+  roles      = [aws_iam_role.ecs_task_execution_role.name]
+}
+
 resource "aws_ecr_repository" "netflix_clone" {
   count = length(data.aws_ecr_repository.existing.id) == 0 ? 1 : 0
 
@@ -23,6 +46,7 @@ resource "aws_ecs_task_definition" "netflix_clone_task" {
   requires_compatibilities = ["FARGATE"]
   cpu                      = "256"
   memory                   = "512"
+  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
 
   container_definitions = jsonencode([{
     name  = "netflix-clone"
@@ -52,4 +76,8 @@ resource "aws_ecs_service" "netflix_clone_service" {
     subnets         = ["subnet-0123456789abcdef0"]
     assign_public_ip = true
   }
+}
+
+output "ecr_repository_url" {
+  value = data.aws_ecr_repository.existing.repository_url
 }
