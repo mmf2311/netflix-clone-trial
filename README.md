@@ -1,55 +1,77 @@
-netflix-clone/
-├── .github/
-│   └── workflows/
-│       ├── ci-cd.yml
-│       └── destroy.yml
-├── backend/
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   └── src/
-│       ├── main.py
-│       └── utils.py
-├── terraform/
-│   ├── main.tf
-│   ├── variables.tf
-│   └── outputs.tf
-├── kubernetes/
-│   ├── deployment.yml
-│   └── service.yml
-└── docs/
-    ├── architecture.md
-    ├── setup.md
-    └── user_experience.md
-└── README.md
+The error indicates that there is a duplicate output definition for `ecr_repository_url`. To resolve this, you need to remove the duplicate output definition from either `main.tf` or `outputs.tf`.
 
-Sure! Below is the reviewed code with values directly grabbed from GitHub Action secrets, ensuring that sensitive information is not hard-coded and is securely accessed from GitHub secrets.
+### Updated terraform/main.tf
+Remove the duplicate output definition from `main.tf`:
 
-### Repository Structure
+```hcl
+provider "aws" {
+  region = var.aws_region
+}
+
+data "aws_ecr_repository" "existing" {
+  name = "group-3-ecr-netflix-clone"
+}
+
+resource "aws_ecr_repository" "netflix_clone" {
+  count = length(data.aws_ecr_repository.existing.id) == 0 ? 1 : 0
+
+  name = "group-3-ecr-netflix-clone"
+  image_tag_mutability = "MUTABLE"
+}
+
+resource "aws_ecs_cluster" "netflix_clone_cluster" {
+  name = "group-3-ecs-cluster-netflix-clone"
+}
+
+resource "aws_ecs_task_definition" "netflix_clone_task" {
+  family                   = "group-3-ecs-task-netflix-clone"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = "256"
+  memory                   = "512"
+
+  container_definitions = jsonencode([{
+    name  = "netflix-clone"
+    image = "${data.aws_ecr_repository.existing.repository_url}:latest"
+    essential = true
+
+    portMappings = [{
+      containerPort = 5000
+      hostPort      = 5000
+    }]
+
+    environment = [{
+      name  = "TMDB_API_KEY"
+      value = var.tmdb_api_key
+    }]
+  }])
+}
+
+resource "aws_ecs_service" "netflix_clone_service" {
+  name            = "group-3-ecs-service-netflix-clone"
+  cluster         = aws_ecs_cluster.netflix_clone_cluster.id
+  task_definition = aws_ecs_task_definition.netflix_clone_task.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets         = ["subnet-0123456789abcdef0"]
+    assign_public_ip = true
+  }
+}
 ```
-netflix-clone/
-├── .github/
-│   └── workflows/
-│       ├── ci-cd.yml
-│       └── destroy.yml
-├── backend/
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   └── src/
-│       ├── main.py
-│       └── utils.py
-├── terraform/
-│   ├── main.tf
-│   ├── variables.tf
-│   └── outputs.tf
-├── kubernetes/
-│   ├── deployment.yml
-│   └── service.yml
-└── docs/
-    ├── architecture.md
-    ├── setup.md
-    └── user_experience.md
-└── README.md
+
+### terraform/outputs.tf
+Ensure the output is defined only in `outputs.tf`:
+
+```hcl
+output "ecr_repository_url" {
+  value = data.aws_ecr_repository.existing.repository_url
+}
 ```
+
+### Review of All Files
+Ensure there are no other duplicate definitions or issues. Here is the complete and reviewed set of configurations:
 
 ### .github/workflows/ci-cd.yml
 ```yaml
@@ -112,6 +134,7 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_REGION: ${{ secrets.AWS_REGION }}
         TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
+        TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
       run: |
         cd terraform
         terraform init
@@ -155,6 +178,7 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_REGION: ${{ secrets.AWS_REGION }}
         TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
+        TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
       run: |
         cd terraform
         terraform destroy -auto-approve
@@ -218,8 +242,15 @@ provider "aws" {
   region = var.aws_region
 }
 
-resource "aws_ecr_repository" "netflix_clone" {
+data "aws_ecr_repository" "existing" {
   name = "group-3-ecr-netflix-clone"
+}
+
+resource "aws_ecr_repository" "netflix_clone" {
+  count = length(data.aws_ecr_repository.existing.id) == 0 ? 1 : 0
+
+  name = "group-3-ecr-netflix-clone"
+  image_tag_mutability = "MUTABLE"
 }
 
 resource "aws_ecs_cluster" "netflix_clone_cluster" {
@@ -235,7 +266,7 @@ resource "aws_ecs_task_definition" "netflix_clone_task" {
 
   container_definitions = jsonencode([{
     name  = "netflix-clone"
-    image = "${aws_ecr_repository.netflix_clone.repository_url}:latest"
+    image = "${data.aws_ecr_repository.existing.repository_url}:latest"
     essential = true
 
     portMappings = [{
@@ -253,7 +284,9 @@ resource "aws_ecs_task_definition" "netflix_clone_task" {
 resource "aws_ecs_service" "netflix_clone_service" {
   name            = "group-3-ecs-service-netflix-clone"
   cluster         = aws_ecs_cluster.netflix_clone_cluster.id
-  task_definition = aws_ecs_task_definition.netflix_clone_task.arn
+  task_definition = aws_ecs_task
+
+_definition.netflix_clone_task.arn
   desired_count   = 1
   launch_type     = "FARGATE"
 
@@ -278,7 +311,7 @@ variable "tmdb_api_key" {
 ### terraform/outputs.tf
 ```hcl
 output "ecr_repository_url" {
-  value = aws_ecr_repository.netflix_clone.repository_url
+  value = data.aws_ecr_repository.existing.repository_url
 }
 ```
 
@@ -330,8 +363,6 @@ spec:
     app: netflix-clone
   ports:
   - port: 80
-
-
     targetPort: 5000
 ```
 
@@ -541,7 +572,9 @@ This document provides an overview of what end users can expect when accessing t
 - Users open the web application in their browser, which is served via AWS Route 53 and API Gateway.
 
 ### Browsing Movies
-- On the home page, users can browse through a list of popular movies.
+- On the
+
+ home page, users can browse through a list of popular movies.
 
 ### Searching for Movies
 - Users can use the search bar to find specific movies by title.
@@ -596,9 +629,7 @@ This project is a Netflix clone application built using GitHub Actions, AWS reso
 
 ## Table of Contents
 
-1. [Team Members](#team
-
--members)
+1. [Team Members](#team-members)
 2. [Project Overview](#project-overview)
 3. [Features](#features)
 4. [User Experience](#user-experience)
@@ -795,7 +826,9 @@ The architecture consists of the following components:
 - **API Gateway**: AWS API Gateway handles the routing and exposure of RESTful APIs created by AWS Lambda functions.
 - **Lambda**: AWS Lambda functions execute the backend logic in a serverless environment, handling requests and interacting with other AWS services.
 - **DynamoDB**: AWS DynamoDB is a NoSQL database used to store application data, such as user profiles and movie details.
-- **SQS**: AWS Simple Queue Service (SQS) is used for decoupling microservices and managing message queues for asynchronous processing.
+- **SQS**
+
+: AWS Simple Queue Service (SQS) is used for decoupling microservices and managing message queues for asynchronous processing.
 - **SNS**: AWS Simple Notification Service (SNS) is used to send notifications and messages to users or other systems.
 - **TMDB API**: An external API used to fetch movie data, including details, search results, and other relevant information. It is integrated into the backend application using the `utils.py` module.
 - **Docker**: Docker is used to containerize the application, ensuring portability and consistency across different environments.
@@ -832,9 +865,7 @@ The architecture consists of the following components:
            +------------+------------+            +------------+------------+
            |                         |            |                         |
     +------+-----+            +------+-----+  +------+-----+            +------+-----+
-    |  DynamoDB  |           
-
- |  SQS Queue |  |  SNS Topic |            |  DynamoDB  |
+    |  DynamoDB  |            |  SQS Queue |  |  SNS Topic |            |  DynamoDB  |
     +------------+            +------------+  +------------+            +------------+
                         |
                         |
@@ -900,5 +931,3 @@ To contribute to this project:
 
 This project is licensed under the MIT License.
 ```
-
-This setup ensures that all sensitive values are securely accessed from GitHub Secrets, and it provides a comprehensive overview of the project, including the necessary configurations and documentation.
