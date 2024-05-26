@@ -23,3 +23,10 @@ spec:
             secretKeyRef:
               name: tmdb-api-key-secret
               key: TMDB_API_KEY
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"

@@ -1,33 +1,63 @@
-Sure, here is the complete code and documentation with the updated GitHub Actions workflow:
+The warning about resource limits is important and should not be ignored. Setting resource limits for your containers ensures that they do not consume more resources than they are allocated, which can help prevent resource starvation for other processes running on the same node.
 
-### GitHub Repository Structure
-```plaintext
-netflix-clone/
-├── .github/
-│   ├── workflows/
-│   │   ├── ci-cd.yml
-│   │   ├── destroy.yml
-├── backend/
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   ├── src/
-│   │   ├── main.py
-│   │   ├── utils.py
-├── terraform/
-│   ├── main.tf
-│   ├── variables.tf
-│   ├── outputs.tf
-├── kubernetes/
-│   ├── deployment.yml
-│   ├── service.yml
-├── docs/
-│   ├── architecture.md
-│   ├── setup.md
-│   ├── user_experience.md
-├── README.md
+The warning regarding `secretKeyRef` is providing information about how to reference Kubernetes secrets. It is not an error, but it's good to ensure that your secrets are correctly configured.
+
+Here's how you can add resource limits to your container and ensure that your `secretKeyRef` is correctly configured:
+
+### Updated Kubernetes Config
+
+#### deployment.yml
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: group-3-deployment-netflix-clone
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: netflix-clone
+  template:
+    metadata:
+      labels:
+        app: netflix-clone
+    spec:
+      containers:
+      - name: netflix-clone
+        image: YOUR_ECR_URL/group-3-ecr-netflix-clone:latest
+        ports:
+        - containerPort: 5000
+        env:
+        - name: TMDB_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: tmdb-api-key-secret
+              key: TMDB_API_KEY
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
 ```
 
-### Backend Code
+In this configuration:
+
+- `requests` specify the amount of CPU and memory that the container is guaranteed.
+- `limits` specify the maximum amount of CPU and memory that the container is allowed to use.
+
+### Secret Configuration
+
+Ensure that the secret `tmdb-api-key-secret` is created in the same namespace where your deployment is running. You can create the secret using the following command:
+
+```bash
+kubectl create secret generic tmdb-api-key-secret --from-literal=TMDB_API_KEY=your_tmdb_api_key
+```
+
+### Full Updated Code and Documentation
+
+Here is the full set of updated files:
 
 #### Dockerfile
 ```dockerfile
@@ -135,7 +165,7 @@ resource "aws_ecs_service" "netflix_clone_service" {
 ```hcl
 variable "aws_region" {
   description = "The AWS region to deploy to"
-  default     = "us-west-2"
+  default     = "us-east-1"
 }
 
 variable "tmdb_api_key" {
@@ -179,6 +209,13 @@ spec:
             secretKeyRef:
               name: tmdb-api-key-secret
               key: TMDB_API_KEY
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
 ```
 
 #### service.yml
@@ -293,7 +330,9 @@ jobs:
 
 The architecture consists of the following components:
 
-- **Users**: End users interact with the application through a web interface.
+- **Users**:
+
+ End users interact with the application through a web interface.
 - **Route 53**: AWS Route 53 is used for DNS management, directing user traffic to the appropriate endpoints.
 - **API Gateway**: AWS API Gateway handles the routing and exposure of RESTful APIs created by AWS Lambda functions.
 - **Lambda**: AWS Lambda functions execute the backend logic in a serverless environment, handling requests and interacting with other AWS services.
@@ -303,9 +342,7 @@ The architecture consists of the following components:
 - **TMDB API**: An external API used to fetch movie data, including details, search results, and other relevant information. It is integrated into the backend application using the `utils.py` module.
 - **Docker**: Docker is used to containerize the application, ensuring portability and consistency across different environments.
 - **ECR**: AWS Elastic Container Registry (ECR) is used to store and manage Docker images.
-- **ECS**
-
-: AWS Elastic Container Service (ECS) is used to run containerized applications. It works with EC2 to provide scalable compute capacity.
+- **ECS**: AWS Elastic Container Service (ECS) is used to run containerized applications. It works with EC2 to provide scalable compute capacity.
 - **EC2**: AWS EC2 instances provide the underlying compute capacity for running the ECS cluster and other resources.
 - **Kubernetes**: Kubernetes is used for container orchestration, managing the deployment, scaling, and operations of containerized applications.
 - **Terraform**: Terraform is used for managing infrastructure as code, automating the setup and configuration of all the necessary AWS resources.
@@ -402,8 +439,8 @@ The architecture consists of the following components:
 3. **Build and Push Docker Image**:
    ```bash
    docker build -t netflix-clone ./backend
-   docker tag netflix-clone:latest <AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com/group-3-ecr-netflix-clone:latest
-   docker push <AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com/group-3-ecr-netflix-clone:latest
+   docker tag netflix-clone:latest <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/group-3-ecr-netflix-clone:latest
+   docker push <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/group-3-ecr-netflix-clone:latest
    ```
 
 4. **Deploy Infrastructure using Terraform**:
@@ -554,7 +591,9 @@ This project is a Netflix clone application built using GitHub Actions, AWS reso
 2. [Project Overview](#project-overview)
 3. [Features](#features)
 4. [User Experience](#user-experience)
-5. [Project Structure](#project-structure)
+5. [Project
+
+ Structure](#project-structure)
 6. [Versioning](#versioning)
 7. [Requirements and Fulfillment](#requirements-and-fulfillment)
 8. [Getting Started](#getting-started)
@@ -588,9 +627,7 @@ The objective of this project is to create a Netflix clone application that auto
 
 For a detailed overview of the user experience, refer to the [User Experience Overview](docs/user_experience.md) document.
 
-## Project
-
- Structure
+## Project Structure
 
 - `.github/workflows`: GitHub Actions workflows for CI/CD and destroying infrastructure
   - `ci-cd.yml`: CI/CD pipeline workflow
@@ -695,8 +732,8 @@ This project follows Semantic Versioning:
 3. **Build and Push Docker Image**:
    ```bash
    docker build -t netflix-clone ./backend
-   docker tag netflix-clone:latest <AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com/group-3-ecr-netflix-clone:latest
-   docker push <AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com/group-3-ecr-netflix-clone:latest
+   docker tag netflix-clone:latest <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/group-3-ecr-netflix-clone:latest
+   docker push <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/group-3-ecr-netflix-clone:latest
    ```
 
 4. **Deploy Infrastructure using Terraform**:
@@ -793,7 +830,9 @@ The architecture consists of the following components:
                   +------------+
                         |
                         |
-                  +-----+------+
+                  +-----
+
++------+
                   |  Docker    |
                   +------------+
                         |
@@ -836,9 +875,7 @@ The architecture consists of the following components:
 
 Detailed documentation is available in the `docs` directory:
 - [Network Architecture](docs/architecture.md)
-- [Setup Instructions](docs/setup.md
-
-)
+- [Setup Instructions](docs/setup.md)
 - [User Experience Overview](docs/user_experience.md)
 
 ## Contributing
@@ -853,4 +890,4 @@ To contribute to this project:
 This project is licensed under the MIT License.
 ```
 
-This README file and code structure include all the necessary details, including a detailed network architecture diagram, explanations, full code for each file, and a new user experience overview document. If there are any further adjustments or additional details needed, please let me know!
+This README file and code structure include all the necessary details, including a detailed network architecture diagram, explanations, full code for each file, and a user experience overview document. If you encounter any further issues or need additional adjustments, please let me know!
