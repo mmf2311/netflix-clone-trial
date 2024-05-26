@@ -2,51 +2,76 @@ name: Destroy Infrastructure
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   destroy:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-    - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ secrets.AWS_REGION }}
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-    - name: Terraform Init
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-        TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
-        TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
-      run: |
-        cd terraform
-        terraform init
+      - name: Install Terraform
+        run: |
+          sudo apt-get update && sudo apt-get install -y unzip
+          curl -LO https://releases.hashicorp.com/terraform/1.0.11/terraform_1.0.11_linux_amd64.zip
+          unzip terraform_1.0.11_linux_amd64.zip
+          sudo mv terraform /usr/local/bin/
+          terraform -install-autocomplete
 
-    - name: Terraform Destroy
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-        TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
-        TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
-      run: |
-        cd terraform
-        terraform destroy -auto-approve
+      - name: Initialize Terraform
+        run: terraform init
+        working-directory: terraform
 
-    - name: Delete ECR repository
-      run: |
-        aws ecr describe-repositories --repository-names group-3-ecr-netflix-clone --region ${{ secrets.AWS_REGION }} && \
-        aws ecr delete-repository --repository-name group-3-ecr-netflix-clone --region ${{ secrets.AWS_REGION }} --force || \
-        echo "Repository group-3-ecr-netflix-clone does not exist or already deleted"
+      - name: Plan Terraform Destroy
+        run: terraform plan -destroy -out=tfplan
+        working-directory: terraform
 
-    - name: Delete IAM Role
-      run: |
-        aws iam delete-role-policy --role-name group-3-ecsTaskExecutionRole --policy-name ecs-task-execution-policy-attachment || true
-        aws iam delete-role --role-name group-3-ecsTaskExecutionRole || true
+      - name: Apply Terraform Destroy
+        run: terraform apply -auto-approve tfplan
+        working-directory: terraform
+
+      - name: Delete ECR repository
+        run: |
+          aws ecr delete-repository --repository-name group-3-ecr-netflix-clone --force || true
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+
+      - name: Delete IAM Role
+        run: |
+          aws iam delete-role-policy --role-name group-3-ecsTaskExecutionRole --policy-name ecs-task-execution-policy || true
+          aws iam delete-role --role-name group-3-ecsTaskExecutionRole || true
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+
+      - name: Delete ECS Cluster
+        run: |
+          aws ecs delete-cluster --cluster group-3-ecs-cluster-netflix-clone || true
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+
+      - name: Delete VPC
+        run: |
+          vpc_id=$(aws ec2 describe-vpcs --filters Name=tag:Name,Values=group-3-vpc-netflix-clone --query "Vpcs[0].VpcId" --output text)
+          if [ "$vpc_id" != "None" ]; then
+            aws ec2 delete-vpc --vpc-id $vpc_id
+          fi
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
