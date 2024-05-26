@@ -1,6 +1,5 @@
-
 locals {
-  timestamp = formatdate("YYYYMMDD-HHMMSS", timestamp())
+  timestamp = formatdate("YYYYMMDD-HHmmss", timestamp())
 }
 
 resource "aws_vpc" "vpc" {
