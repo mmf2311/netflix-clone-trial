@@ -49,8 +49,15 @@ resource "aws_route_table_association" "netflix_clone_route_table_association" {
   route_table_id = aws_route_table.netflix_clone_route_table.id
 }
 
+# Check for existing IAM Role
+data "aws_iam_role" "existing_ecs_task_execution_role" {
+  name = "group-3-ecsTaskExecutionRole"
+}
+
 # IAM Role and Policy for ECS Task Execution
 resource "aws_iam_role" "ecs_task_execution_role" {
+  count = data.aws_iam_role.existing_ecs_task_execution_role.arn == "" ? 1 : 0
+
   name = "group-3-ecsTaskExecutionRole"
 
   assume_role_policy = jsonencode({
@@ -65,39 +72,30 @@ resource "aws_iam_role" "ecs_task_execution_role" {
       }
     ]
   })
-
-  lifecycle {
-    create_before_destroy = true
-    ignore_changes        = [name]
-  }
 }
 
 resource "aws_iam_policy_attachment" "ecs_task_execution_policy" {
+  depends_on = [aws_iam_role.ecs_task_execution_role]
+
   name       = "ecs-task-execution-policy-attachment"
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
   roles      = [aws_iam_role.ecs_task_execution_role.name]
+}
 
-  lifecycle {
-    ignore_changes = [roles]
-  }
+# Check for existing ECR repository
+data "aws_ecr_repository" "existing_netflix_clone" {
+  name = "group-3-ecr-netflix-clone"
 }
 
 resource "aws_ecr_repository" "netflix_clone" {
+  count = data.aws_ecr_repository.existing_netflix_clone.repository_uri == "" ? 1 : 0
+
   name                 = "group-3-ecr-netflix-clone"
   image_tag_mutability = "MUTABLE"
-
-  lifecycle {
-    create_before_destroy = true
-    ignore_changes        = [name]
-  }
 }
 
 resource "aws_ecs_cluster" "netflix_clone_cluster" {
   name = "group-3-ecs-cluster-netflix-clone"
-
-  lifecycle {
-    ignore_changes = [name]
-  }
 }
 
 resource "aws_ecs_task_definition" "netflix_clone_task" {
@@ -110,7 +108,7 @@ resource "aws_ecs_task_definition" "netflix_clone_task" {
 
   container_definitions = jsonencode([{
     name  = "netflix-clone"
-    image = "${aws_ecr_repository.netflix_clone.repository_url}:latest"
+    image = "${data.aws_ecr_repository.existing_netflix_clone.repository_uri}:latest"
     essential = true
 
     portMappings = [{
@@ -123,10 +121,6 @@ resource "aws_ecs_task_definition" "netflix_clone_task" {
       value = var.tmdb_api_key
     }]
   }])
-
-  lifecycle {
-    ignore_changes = [family]
-  }
 }
 
 resource "aws_ecs_service" "netflix_clone_service" {
@@ -139,9 +133,5 @@ resource "aws_ecs_service" "netflix_clone_service" {
   network_configuration {
     subnets         = [aws_subnet.netflix_clone_subnet.id]
     assign_public_ip = true
-  }
-
-  lifecycle {
-    ignore_changes = [name]
   }
 }
