@@ -1,77 +1,27 @@
-The error indicates that there is a duplicate output definition for `ecr_repository_url`. To resolve this, you need to remove the duplicate output definition from either `main.tf` or `outputs.tf`.
+Here is the complete set of Terraform configuration files, CI/CD workflows, and a detailed README file for documentation. The repository structure and all necessary files are included.
 
-### Updated terraform/main.tf
-Remove the duplicate output definition from `main.tf`:
-
-```hcl
-provider "aws" {
-  region = var.aws_region
-}
-
-data "aws_ecr_repository" "existing" {
-  name = "group-3-ecr-netflix-clone"
-}
-
-resource "aws_ecr_repository" "netflix_clone" {
-  count = length(data.aws_ecr_repository.existing.id) == 0 ? 1 : 0
-
-  name = "group-3-ecr-netflix-clone"
-  image_tag_mutability = "MUTABLE"
-}
-
-resource "aws_ecs_cluster" "netflix_clone_cluster" {
-  name = "group-3-ecs-cluster-netflix-clone"
-}
-
-resource "aws_ecs_task_definition" "netflix_clone_task" {
-  family                   = "group-3-ecs-task-netflix-clone"
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
-  cpu                      = "256"
-  memory                   = "512"
-
-  container_definitions = jsonencode([{
-    name  = "netflix-clone"
-    image = "${data.aws_ecr_repository.existing.repository_url}:latest"
-    essential = true
-
-    portMappings = [{
-      containerPort = 5000
-      hostPort      = 5000
-    }]
-
-    environment = [{
-      name  = "TMDB_API_KEY"
-      value = var.tmdb_api_key
-    }]
-  }])
-}
-
-resource "aws_ecs_service" "netflix_clone_service" {
-  name            = "group-3-ecs-service-netflix-clone"
-  cluster         = aws_ecs_cluster.netflix_clone_cluster.id
-  task_definition = aws_ecs_task_definition.netflix_clone_task.arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
-
-  network_configuration {
-    subnets         = ["subnet-0123456789abcdef0"]
-    assign_public_ip = true
-  }
-}
+### Repository Structure
 ```
-
-### terraform/outputs.tf
-Ensure the output is defined only in `outputs.tf`:
-
-```hcl
-output "ecr_repository_url" {
-  value = data.aws_ecr_repository.existing.repository_url
-}
+netflix-clone/
+├── .github/
+│   └── workflows/
+│       ├── ci-cd.yml
+│       └── destroy.yml
+├── backend/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── src/
+│       ├── main.py
+│       └── utils.py
+├── terraform/
+│   ├── main.tf
+│   ├── variables.tf
+│   └── outputs.tf
+├── kubernetes/
+│   ├── deployment.yml
+│   └── service.yml
+└── README.md
 ```
-
-### Review of All Files
-Ensure there are no other duplicate definitions or issues. Here is the complete and reviewed set of configurations:
 
 ### .github/workflows/ci-cd.yml
 ```yaml
@@ -185,7 +135,14 @@ jobs:
 
     - name: Delete ECR repository
       run: |
-        aws ecr delete-repository --repository-name group-3-ecr-netflix-clone --region ${{ secrets.AWS_REGION }} --force
+        aws ecr describe-repositories --repository-names group-3-ecr-netflix-clone --region ${{ secrets.AWS_REGION }} && \
+        aws ecr delete-repository --repository-name group-3-ecr-netflix-clone --region ${{ secrets.AWS_REGION }} --force || \
+        echo "Repository group-3-ecr-netflix-clone does not exist or already deleted"
+
+    - name: Delete IAM Role
+      run: |
+        aws iam delete-role-policy --role-name group-3-ecsTaskExecutionRole --policy-name ecs-task-execution-policy-attachment || true
+        aws iam delete-role --role-name group-3-ecsTaskExecutionRole || true
 ```
 
 ### backend/Dockerfile
@@ -242,19 +199,86 @@ provider "aws" {
   region = var.aws_region
 }
 
-data "aws_ecr_repository" "existing" {
-  name = "group-3-ecr-netflix-clone"
+# New VPC Resource
+resource "aws_vpc" "netflix_clone_vpc" {
+  cidr_block = "10.0.0.0/16"
+  tags = {
+    Name = "group-3-vpc-netflix-clone"
+  }
+}
+
+# New Subnet Resource
+resource "aws_subnet" "netflix_clone_subnet" {
+  vpc_id                  = aws_vpc.netflix_clone_vpc.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "us-east-1a"
+  map_public_ip_on_launch = true
+  tags = {
+    Name = "group-3-subnet-netflix-clone"
+  }
+}
+
+# Internet Gateway
+resource "aws_internet_gateway" "netflix_clone_igw" {
+  vpc_id = aws_vpc.netflix_clone_vpc.id
+  tags = {
+    Name = "group-3-igw-netflix-clone"
+  }
+}
+
+# Route Table
+resource "aws_route_table" "netflix_clone_route_table" {
+  vpc_id = aws_vpc.netflix_clone_vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.netflix_clone_igw.id
+  }
+
+  tags = {
+    Name = "group-3-rt-netflix-clone"
+  }
+}
+
+# Route Table Association
+resource "aws_route_table_association" "netflix_clone_route_table_association" {
+  subnet_id      = aws_subnet.netflix_clone_subnet.id
+  route_table_id = aws_route_table.netflix_clone_route_table.id
+}
+
+# IAM Role and Policy for ECS Task Execution
+resource "aws_iam_role" "ecs_task_execution_role" {
+  name = "group-3-ecsTaskExecutionRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_policy_attachment" "ecs_task_execution_policy" {
+  name       = "ecs-task-execution-policy-attachment"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+  roles      = [aws_iam_role.ecs_task_execution_role.name]
 }
 
 resource "aws_ecr_repository" "netflix_clone" {
-  count = length(data.aws_ecr_repository.existing.id) == 0 ? 1 : 0
-
-  name = "group-3-ecr-netflix-clone"
+  name                 = "group-3-ecr-netflix-clone"
   image_tag_mutability = "MUTABLE"
 }
 
 resource "aws_ecs_cluster" "netflix_clone_cluster" {
-  name = "group-3-ecs-cluster-netflix-clone"
+  name
+
+ = "group-3-ecs-cluster-netflix-clone"
 }
 
 resource "aws_ecs_task_definition" "netflix_clone_task" {
@@ -263,10 +287,11 @@ resource "aws_ecs_task_definition" "netflix_clone_task" {
   requires_compatibilities = ["FARGATE"]
   cpu                      = "256"
   memory                   = "512"
+  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
 
   container_definitions = jsonencode([{
     name  = "netflix-clone"
-    image = "${data.aws_ecr_repository.existing.repository_url}:latest"
+    image = "${aws_ecr_repository.netflix_clone.repository_url}:latest"
     essential = true
 
     portMappings = [{
@@ -284,16 +309,18 @@ resource "aws_ecs_task_definition" "netflix_clone_task" {
 resource "aws_ecs_service" "netflix_clone_service" {
   name            = "group-3-ecs-service-netflix-clone"
   cluster         = aws_ecs_cluster.netflix_clone_cluster.id
-  task_definition = aws_ecs_task
-
-_definition.netflix_clone_task.arn
+  task_definition = aws_ecs_task_definition.netflix_clone_task.arn
   desired_count   = 1
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets         = ["subnet-0123456789abcdef0"]
+    subnets         = [aws_subnet.netflix_clone_subnet.id]
     assign_public_ip = true
   }
+}
+
+output "ecr_repository_url" {
+  value = aws_ecr_repository.netflix_clone.repository_url
 }
 ```
 
@@ -311,7 +338,7 @@ variable "tmdb_api_key" {
 ### terraform/outputs.tf
 ```hcl
 output "ecr_repository_url" {
-  value = data.aws_ecr_repository.existing.repository_url
+  value = aws_ecr_repository.netflix_clone.repository_url
 }
 ```
 
@@ -320,9 +347,9 @@ output "ecr_repository_url" {
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: group-3-deployment-netflix-clone
+  name: netflix-clone
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: netflix-clone
@@ -333,7 +360,7 @@ spec:
     spec:
       containers:
       - name: netflix-clone
-        image: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-ecr-netflix-clone:latest
+        image: YOUR_ECR_URL/group-3-ecr-netflix-clone:latest
         ports:
         - containerPort: 5000
         env:
@@ -342,13 +369,6 @@ spec:
             secretKeyRef:
               name: tmdb-api-key-secret
               key: TMDB_API_KEY
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
 ```
 
 ### kubernetes/service.yml
@@ -356,293 +376,24 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: group-3-service-netflix-clone
+  name: netflix-clone-service
 spec:
-  type: LoadBalancer
   selector:
     app: netflix-clone
   ports:
-  - port: 80
-    targetPort: 5000
-```
-
-### docs/architecture.md
-```markdown
-# Network Architecture
-
-The architecture consists of the following components:
-
-- **Users**: End users interact with the application through a web interface.
-- **Route 53**: AWS Route 53 is used for DNS management, directing user traffic to the appropriate endpoints.
-- **API Gateway**: AWS API Gateway handles the routing and exposure of RESTful APIs created by AWS Lambda functions.
-- **Lambda**: AWS Lambda functions execute the backend logic in a serverless environment, handling requests and interacting with other AWS services.
-- **DynamoDB**: AWS DynamoDB is a NoSQL database used to store application data, such as user profiles and movie details.
-- **SQS**: AWS Simple Queue Service (SQS) is used for decoupling microservices and managing message queues for asynchronous processing.
-- **SNS**: AWS Simple Notification Service (SNS) is used to send notifications and messages to users or other systems.
-- **TMDB API**: An external API used to fetch movie data, including details, search results, and other relevant information. It is integrated into the backend application using the `utils.py` module.
-- **Docker**: Docker is used to containerize the application, ensuring portability and consistency across different environments.
-- **ECR**: AWS Elastic Container Registry (ECR) is used to store and manage Docker images.
-- **ECS**: AWS Elastic Container Service (ECS) is used to run containerized applications. It works with EC2 to provide scalable compute capacity.
-- **EC2**: AWS EC2 instances provide the underlying compute capacity for running the ECS cluster and other resources.
-- **Kubernetes**: Kubernetes is used for container orchestration, managing the deployment, scaling, and operations of containerized applications.
-- **Terraform**: Terraform is used for managing infrastructure as code, automating the setup and configuration of all the necessary AWS resources.
-
-### Detailed Architecture Diagram
-
-```plaintext
-                                      +-------------+
-                                      |   Users     |
-                                      +------+------+
-                                             |
-                                             |
-                                      +------+------+
-                                      |   Route53   |
-                                      +------+------+
-                                             |
-                                             |
-                                      +------+------+
-                                      | API Gateway |
-                                      +------+------+
-                                             |
-                        +--------------------+------------------+
-                        |                                       |
-                +-------+-------+                       +-------+-------+
-                |  AWS Lambda   |                       |  AWS Lambda   |
-                +-------+-------+                       +-------+-------+
-                        |                                       |
-                        |                                       |
-           +------------+------------+            +------------+------------+
-           |                         |            |                         |
-    +------+-----+            +------+-----+  +------+-----+            +------+-----+
-    |  DynamoDB  |            |  SQS Queue |  |  SNS Topic |            |  DynamoDB  |
-    +------------+            +------------+  +------------+            +------------+
-                        |
-                        |
-                  +-----+------+
-                  |  TMDB API  |
-                  +------------+
-                        |
-                        |
-                  +-----+------+
-                  |  Docker    |
-                  +------------+
-                        |
-                        |
-                  +-----+------+
-                  |  ECR       |
-                  +------------+
-                        |
-                        |
-                  +-----+------+
-                  |  ECS       |
-                  +------------+
-                        |
-                        |
-                  +-----+------+
-                  |  EC2       |
-                  +------------+
-                        |
-                        |
-                  +-----+------+
-                  |  Kubernetes|
-                  +------------+
-                        |
-                        |
-                  +-----+------+
-                  |  Terraform |
-                  +------------+
-```
-
-### docs/setup.md
-```markdown
-# Setup Instructions
-
-## Prerequisites
-- Docker
-- Terraform
-- AWS CLI
-- Kubernetes CLI (kubectl)
-- GitHub account with access to repository
-
-## Setup Steps
-1. **Clone the Repository**:
-   ```bash
-   git clone https://github.com/yourusername/netflix-clone.git
-   cd netflix-clone
-   ```
-
-2. **Configure AWS CLI**:
-   ```bash
-   aws configure
-   ```
-
-3. **Build and Push Docker Image**:
-   ```bash
-   docker build -t netflix-clone ./backend
-   docker tag netflix-clone:latest <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/group-3-ecr-netflix-clone:latest
-   docker push <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/group-3-ecr-netflix-clone:latest
-   ```
-
-4. **Deploy Infrastructure using Terraform**:
-   ```bash
-   cd terraform
-   terraform init
-   terraform apply -auto-approve
-   ```
-
-5. **Create Kubernetes Secret for TMDB API Key**:
-   ```bash
-   kubectl create secret generic tmdb-api-key-secret --from-literal=TMDB_API_KEY=your_tmdb_api_key
-   ```
-
-6. **Deploy to Kubernetes**:
-   ```bash
-   kubectl apply -f ./kubernetes
-   ```
-
-## Environment Variables
-- `AWS_REGION`: The AWS region to deploy to.
-- `TMDB_API_KEY`: Your TMDB API key for movie data.
-
-## GitHub Secrets
-Ensure the following secrets are added to your GitHub repository:
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
-- `AWS_REGION`
-- `TMDB_API_KEY`
-```
-
-### docs/user_experience.md
-```markdown
-# User Experience Overview
-
-## Introduction
-This document provides an overview of what end users can expect when accessing the Netflix clone application. The application offers various features for browsing, searching, and managing movies, as well as user authentication and personalized experiences.
-
-## Features and User Experience
-
-### Home Page
-- Displays a list of popular movies fetched from the TMDB API.
-- Users can see movie posters, titles, and brief descriptions.
-
-### Search Functionality
-- A search bar allows users to search for movies by title.
-- Search results display matching movies with their posters and titles.
-
-### Movie Details Page
-- Clicking on a movie from the home page or search results takes the user to a detailed page.
-- The details page includes the movie's poster, title, release date, rating, overview, and other relevant information.
-
-### User Authentication
-- Users can sign up for a new account or log in with an existing account.
-- Authentication is required to access certain features, like adding movies to a watchlist.
-
-### User Profile
-- Authenticated users have access to their profile page.
-- Users can view and manage their personal information, such as email and password.
-- Users can view their watchlist, which includes movies they've added.
-
-### Watchlist
-- Authenticated users can add movies to their watchlist from the movie details page.
-- Users can view their watchlist on their profile page and remove movies if desired.
-
-### Notifications
-- Users receive notifications about new movie releases, updates, or personalized recommendations.
-
-## Backend Operations
-
-### API Integration
-- The application integrates with the TMDB API to fetch movie data, including popular movies, search results, and movie details.
-
-### Data Storage
-- User data and watchlists are stored in DynamoDB, a NoSQL database service.
-
-### Serverless Functions
-- AWS Lambda functions handle backend logic, such as user authentication, data fetching, and watchlist management.
-
-### Containerized Deployment
-- The backend application is containerized using Docker and deployed to AWS ECS, ensuring scalability and reliability.
-
-### CI/CD Pipeline
-- Continuous Integration and Continuous Deployment (CI/CD) pipelines are set up using GitHub Actions to automate testing, building, and deploying the application.
-
-## Expected Flow for End Users
-
-### Accessing the Application
-- Users open the web application in their browser, which is served via AWS Route 53 and API Gateway.
-
-### Browsing Movies
-- On the
-
- home page, users can browse through a list of popular movies.
-
-### Searching for Movies
-- Users can use the search bar to find specific movies by title.
-
-### Viewing Movie Details
-- Users can click on any movie to view detailed information.
-
-### Creating an Account
-- New users can sign up for an account using their email and a password.
-
-### Logging In
-- Returning users can log in with their credentials.
-
-### Managing Profile and Watchlist
-- Authenticated users can view and update their profile information.
-- Users can add movies to their watchlist from the movie details page and view or manage their watchlist from their profile page.
-
-### Receiving Notifications
-- Users receive notifications about new movies, updates, or personalized recommendations.
-
-## Security and Reliability
-
-### Authentication
-- Secure user authentication and authorization are implemented to protect user data.
-
-### Data Privacy
-- User data is stored securely in DynamoDB, and access is restricted.
-
-### Scalability
-- The application uses AWS ECS and EC2 to ensure it can handle varying loads.
-
-### Automation
-- CI/CD pipelines automate testing and deployment, ensuring rapid and reliable updates.
-
-## Future Enhancements
-
-- **User Reviews and Ratings**: Allow users to leave reviews and rate movies.
-- **Recommendation Engine**: Suggest movies based on user preferences and watch history.
-- **Video Streaming**: Integrate video streaming capabilities directly into the application.
-- **Offline Mode**: Enable users to download movies for offline viewing.
-- **Multi-language Support**: Add support for multiple languages to cater to a broader audience.
-
-## Conclusion
-This document provides an overview of the features and user experience of the Netflix clone application. It highlights the key functionalities, backend operations, and the secure and scalable infrastructure supporting the application. Future enhancements aim to further enrich the user experience and expand the application's capabilities.
+    - protocol: TCP
+      port: 80
+      targetPort: 5000
+  type: LoadBalancer
 ```
 
 ### README.md
 ```markdown
 # Netflix Clone Application
 
-This project is a Netflix clone application built using GitHub Actions, AWS resources, Docker, Terraform, and other tools.
+## Project Overview
 
-## Table of Contents
-
-1. [Team Members](#team-members)
-2. [Project Overview](#project-overview)
-3. [Features](#features)
-4. [User Experience](#user-experience)
-5. [Project Structure](#project-structure)
-6. [Versioning](#versioning)
-7. [Requirements and Fulfillment](#requirements-and-fulfillment)
-8. [Getting Started](#getting-started)
-9. [CI/CD Pipeline](#ci-cd-pipeline)
-10. [Network Architecture](#network-architecture)
-11. [Potential Enhancements](#potential-enhancements)
-12. [Documentation](#documentation)
-13. [Contributing](#contributing)
-14. [License](#license)
+This project is a Netflix clone application that demonstrates a cloud-native application using a modern CI/CD pipeline. It utilizes various AWS services, Docker, Kubernetes, and other technologies to automate the deployment process.
 
 ## Team Members
 
@@ -652,282 +403,131 @@ This project is a Netflix clone application built using GitHub Actions, AWS reso
 4. Mohamed Malik
 5. Mohammad Sufiyan
 
-## Project Overview
-
-The objective of this project is to create a Netflix clone application that automates the deployment process using CI/CD pipelines, containerization, and various AWS services. The application includes features like user authentication, movie browsing, and searching using the TMDB API, and more.
-
-## Features
-
-- User authentication
-- Movie browsing and searching using TMDB API
-- Movie details view
-- Basic user profile management
-
-## User Experience
-
-For a detailed overview of the user experience, refer to the [User Experience Overview](docs/user_experience.md) document.
-
 ## Project Structure
 
-- `.github/workflows`: GitHub Actions workflows for CI/CD and destroying infrastructure
-  - `ci-cd.yml`: CI/CD pipeline workflow
-  - `destroy.yml`: Workflow to destroy all AWS resources
-- `backend`: Backend application source code and Dockerfile
-  - `src`: Source code directory
-    - `main.py`: Main application file
-    - `utils.py`: Utility functions
-- `terraform`: Terraform scripts for infrastructure as code
-  - `main.tf`: Main Terraform configuration
-  - `variables.tf`: Terraform variables
-  - `outputs.tf`: Terraform outputs
-- `kubernetes`: Kubernetes deployment and service files
-  - `deployment.yml`: Kubernetes deployment configuration
-  - `service.yml`: Kubernetes service configuration
-- `docs`: Documentation files
-  - `architecture.md`: Network architecture documentation
-  - `setup.md`: Setup instructions
-  - `user_experience.md`: User experience overview
-- `README.md`: Project documentation file
+```
+netflix-clone/
+├── .github/
+│   └── workflows/
+│       ├── ci-cd.yml
+│       └── destroy.yml
+├── backend/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── src/
+│       ├── main.py
+│       └── utils.py
+├── terraform/
+│   ├── main.tf
+│   ├── variables.tf
+│   └── outputs.tf
+├── kubernetes/
+│   ├── deployment.yml
+│   └── service.yml
+└── README.md
+```
 
-## Versioning
+## Technologies Used
 
-This project follows Semantic Versioning:
-- **MAJOR** version when making incompatible API changes
-- **MINOR** version when adding functionality in a backwards-compatible manner
-- **PATCH** version when making backwards-compatible bug fixes
+- **AWS**: ECR, ECS, IAM, VPC, Subnet, Internet Gateway, Route Table
+- **Docker**: Containerization of the backend application
+- **Kubernetes**: Deployment and Service configuration
+- **Terraform**: Infrastructure as Code (IaC) for AWS resources
+- **GitHub Actions**: CI/CD pipeline automation
+- **Flask**: Backend framework for the application
+- **TMDB API**: External API for movie data
 
-### Current Version
+## Network Architecture
 
-- **1.0.0**: Initial release with base features including user authentication, movie browsing, and searching.
+```plaintext
+AWS VPC: group-3-vpc-netflix-clone
+    ├── Subnet: group-3-subnet-netflix-clone
+    ├── Internet Gateway: group-3-igw-netflix-clone
+    ├── Route Table: group-3-rt-netflix-clone
+    │   └── Route Table Association: group-3-rt-association-netflix-clone
+    └── ECS Cluster: group-3-ecs-cluster-netflix-clone
+        ├── ECS Task Definition: group-3-ecs-task-netflix-clone
+        └── ECS Service: group-3-ecs-service-netflix-clone
+            └── Docker Image: group-3-ecr-netflix-clone
+```
 
-## Requirements and Fulfillment
+## CI/CD Pipeline
 
-### Create New Project
+The CI/CD pipeline is configured using GitHub Actions with the following steps:
 
-- **GitHub repository**: Instructions included in the README for creating and setting up the repository.
+1. **Checkout Code**: Checkout the latest code from the repository.
+2. **Set up Docker Buildx**: Set up Docker Buildx for multi-platform builds.
+3. **Configure AWS Credentials**: Configure AWS credentials using GitHub Secrets.
+4. **Log in to Amazon ECR**: Authenticate Docker to the Amazon ECR registry.
+5. **Create ECR Repository**: Create the ECR repository if it doesn't exist.
+6. **Build Docker Image**: Build the Docker image for the backend application.
+7. **Tag Docker Image**: Tag the Docker image with the latest tag.
+8. **Push Docker Image to ECR**: Push the Docker image to Amazon ECR.
+9. **Terraform Init and Apply**: Initialize and apply the Terraform configuration to create/update infrastructure.
+10. **Deploy to Kubernetes**: Deploy the application to Kubernetes using the deployment and service configurations.
 
-### Add Backend Application
+## Secrets Management
 
-- **Containerized backend application**: Dockerfile provided for containerization.
-- **Sample backend application**: Example code provided for a backend application using Flask and TMDB API.
+Secrets required for the CI/CD pipeline are stored in GitHub Secrets:
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_REGION`
+- `TMDB_API_KEY`
 
-### Define the Branching Strategy & Set Branch Permissions
+## Destroy Infrastructure
 
-- **Branching strategy**: Mentioned the use of `dev`, `main`, and `feature/*` branches in the CI/CD workflow.
-- **Branch permissions**: Not explicitly covered, but assumed as part of the GitHub repository setup.
-
-### Write CI/CD Script
-
-- **CI/CD scripts**: Provided in the `.github/workflows/ci-cd.yml` for building, testing, and deploying.
-- **Docker image build and deployment**: Included in the CI/CD workflow.
-
-### Implement a Complete Workflow
-
-- **CI/CD tool**: GitHub Actions used for the CI/CD pipeline.
-- **Workflow**: Detailed in the `ci-cd.yml` file, covering build, test, and deployment processes.
-- **Pull request workflow**: Included in the CI/CD pipeline details.
-
-### Well-Documented Code
-
-- **Documentation**: README.md includes setup instructions, architecture, and contribution guidelines.
-- **Diagrams and setup**: ASCII diagram for network architecture included, detailed instructions in `setup.md`.
-
-### Destroy Workflow
-
-- **Destroy workflow**: Provided in `.github/workflows/destroy.yml`.
-
-### Additional Requirements:
-
-- **Use of AWS resources**: Detailed in Terraform configurations.
-- **Explanation of tools**: Provided in the README.md.
-- **Detailed network architecture diagram**: Included in README.md and `architecture.md`.
-- **GitHub repository structure**: Detailed in README.md.
-- **Versioning and explanation of base features**: Included in README.md.
-- **Potential enhancements**: Listed in README.md.
-- **Full code and documentation**: Provided in all relevant sections.
+To destroy the infrastructure created by Terraform, a separate GitHub Actions workflow is provided (`destroy.yml`). This workflow will:
+1. Checkout the latest code from the repository.
+2. Configure AWS credentials using GitHub Secrets.
+3. Run `terraform destroy` to destroy all resources created by Terraform.
+4. Delete the ECR repository if it exists.
+5. Delete the IAM role and policy if they exist.
 
 ## Getting Started
 
 ### Prerequisites
 
-- Docker
-- Terraform
-- AWS CLI
-- Kubernetes CLI (kubectl)
-- GitHub account with access to the repository
+- AWS account with necessary permissions
+- Docker installed
+- Kubernetes cluster set up (e.g., EKS, GKE, AKS, or Minikube)
+- GitHub repository with Actions enabled
 
-### Setup
+### Clone the Repository
 
-1. **Clone the Repository**:
-   ```bash
-   git clone https://github.com/yourusername/netflix-clone.git
-   cd netflix-clone
-   ```
-
-2. **Configure AWS CLI**:
-   ```bash
-   aws configure
-   ```
-
-3. **Build and Push Docker Image**:
-   ```bash
-   docker build -t netflix-clone ./backend
-   docker tag netflix-clone:latest <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/group-3-ecr-netflix-clone:latest
-   docker push <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/group-3-ecr-netflix-clone:latest
-   ```
-
-4. **Deploy Infrastructure using Terraform**:
-   ```bash
-   cd terraform
-   terraform init
-   terraform apply -auto-approve
-   ```
-
-5. **Create Kubernetes Secret for TMDB API Key**:
-   ```bash
-   kubectl create secret generic tmdb-api-key-secret --from-literal=TMDB_API_KEY=your_tmdb_api_key
-   ```
-
-6. **Deploy to Kubernetes**:
-   ```bash
-   kubectl apply -f ./kubernetes
-   ```
-
-## CI/CD Pipeline
-
-The CI/CD pipeline is managed using GitHub Actions and includes the following workflows:
-
-### CI/CD Workflow (ci-cd.yml)
-
-- Builds, tests, and deploys the application on every push or pull request to the `dev`, `main`, or `feature/*` branches.
-1. **Build and push Docker image**:
-   - Uses Docker to build the image and pushes it to AWS ECR.
-2. **Deploy to ECR**:
-   - Tags and pushes the Docker image to AWS Elastic Container Registry.
-3. **Terraform Apply**:
-   - Deploys infrastructure using Terraform.
-4. **Deploy to Kubernetes**:
-   - Applies Kubernetes configurations for deployment and service.
-
-### Destroy Workflow (destroy.yml)
-
-- Destroys all resources created in AWS.
-1. **Terraform Destroy**:
-   - Destroys all infrastructure resources created by Terraform.
-2. **Delete ECR Repository**:
-   - Deletes the ECR repository to ensure all Docker images and the repository itself are removed.
-
-## Network Architecture
-
-The architecture consists of the following components:
-
-- **Users**: End users interact with the application through a web interface.
-- **Route 53**: AWS Route 53 is used for DNS management, directing user traffic to the appropriate endpoints.
-- **API Gateway**: AWS API Gateway handles the routing and exposure of RESTful APIs created by AWS Lambda functions.
-- **Lambda**: AWS Lambda functions execute the backend logic in a serverless environment, handling requests and interacting with other AWS services.
-- **DynamoDB**: AWS DynamoDB is a NoSQL database used to store application data, such as user profiles and movie details.
-- **SQS**
-
-: AWS Simple Queue Service (SQS) is used for decoupling microservices and managing message queues for asynchronous processing.
-- **SNS**: AWS Simple Notification Service (SNS) is used to send notifications and messages to users or other systems.
-- **TMDB API**: An external API used to fetch movie data, including details, search results, and other relevant information. It is integrated into the backend application using the `utils.py` module.
-- **Docker**: Docker is used to containerize the application, ensuring portability and consistency across different environments.
-- **ECR**: AWS Elastic Container Registry (ECR) is used to store and manage Docker images.
-- **ECS**: AWS Elastic Container Service (ECS) is used to run containerized applications. It works with EC2 to provide scalable compute capacity.
-- **EC2**: AWS EC2 instances provide the underlying compute capacity for running the ECS cluster and other resources.
-- **Kubernetes**: Kubernetes is used for container orchestration, managing the deployment, scaling, and operations of containerized applications.
-- **Terraform**: Terraform is used for managing infrastructure as code, automating the setup and configuration of all the necessary AWS resources.
-
-### Detailed Architecture Diagram
-
-```plaintext
-                                      +-------------+
-                                      |   Users     |
-                                      +------+------+
-                                             |
-                                             |
-                                      +------+------+
-                                      |   Route53   |
-                                      +------+------+
-                                             |
-                                             |
-                                      +------+------+
-                                      | API Gateway |
-                                      +------+------+
-                                             |
-                        +--------------------+------------------+
-                        |                                       |
-                +-------+-------+                       +-------+-------+
-                |  AWS Lambda   |                       |  AWS Lambda   |
-                +-------+-------+                       +-------+-------+
-                        |                                       |
-                        |                                       |
-           +------------+------------+            +------------+------------+
-           |                         |            |                         |
-    +------+-----+            +------+-----+  +------+-----+            +------+-----+
-    |  DynamoDB  |            |  SQS Queue |  |  SNS Topic |            |  DynamoDB  |
-    +------------+            +------------+  +------------+            +------------+
-                        |
-                        |
-                  +-----+------+
-                  |  TMDB API  |
-                  +------------+
-                        |
-                        |
-                  +-----+------+
-                  |  Docker    |
-                  +------------+
-                        |
-                        |
-                  +-----+------+
-                  |  ECR       |
-                  +------------+
-                        |
-                        |
-                  +-----+------+
-                  |  ECS       |
-                  +------------+
-                        |
-                        |
-                  +-----+------+
-                  |  EC2       |
-                  +------------+
-                        |
-                        |
-                  +-----+------+
-                  |  Kubernetes|
-                  +------------+
-                        |
-                        |
-                  +-----+------+
-                  |  Terraform |
-                  +------------+
+```sh
+git clone https://github.com/yourusername/netflix-clone.git
+cd netflix-clone
 ```
 
-## Potential Enhancements
+### Setting up Environment Variables
 
-- **User Reviews and Ratings**: Implement a system for users to leave reviews and rate movies.
-- **Recommendation Engine**: Develop a recommendation engine to suggest movies based on user preferences and watch history.
-- **Video Streaming**: Integrate video streaming capabilities.
-- **User Notifications**: Use SNS to notify users about new movies, updates, or recommendations.
-- **Offline Mode**: Allow users to download movies for offline viewing.
-- **Multi-language Support**: Add support for multiple languages to cater to a broader audience.
+Set the required environment variables in GitHub Secrets.
 
-## Documentation
+### Running the Application Locally
 
-Detailed documentation is available in the `docs` directory:
-- [Network Architecture](docs/architecture.md)
-- [Setup Instructions](docs/setup.md)
-- [User Experience Overview](docs/user_experience.md)
+1. **Build Docker Image**
 
-## Contributing
+   ```sh
+   docker build -t netflix-clone:latest -f backend/Dockerfile backend
+   ```
 
-To contribute to this project:
-1. Create a new feature branch from the `dev` branch.
-2. Make your changes.
-3. Create a pull request to the `dev` branch.
+2. **Run Docker Container**
 
-## License
+   ```sh
+   docker run -p 5000:5000 --env TMDB_API_KEY=your_tmdb_api_key netflix-clone:latest
+   ```
 
-This project is licensed under the MIT License.
+### Trigger CI/CD Pipeline
+
+Push changes to the repository or create a pull request to trigger the CI/CD pipeline.
+
+### Destroy Infrastructure
+
+Trigger the `Destroy Infrastructure` workflow manually from the GitHub Actions tab.
+
+## Conclusion
+
+This project demonstrates a comprehensive setup for deploying a cloud-native application using modern DevOps practices. The CI/CD pipeline ensures that the application can be reliably and efficiently deployed, while Terraform provides infrastructure as code for reproducibility and scalability.
 ```
+
+Ensure you replace placeholders such as `YOUR_ECR_URL` and `your_tmdb_api_key` with actual values. Commit and push these changes to your repository. This setup should provide a comprehensive record of your project.

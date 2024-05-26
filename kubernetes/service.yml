@@ -1,11 +1,12 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: group-3-service-netflix-clone
+  name: netflix-clone-service
 spec:
-  type: LoadBalancer
   selector:
     app: netflix-clone
   ports:
-  - port: 80
-    targetPort: 5000
+    - protocol: TCP
+      port: 80
+      targetPort: 5000
+  type: LoadBalancer
