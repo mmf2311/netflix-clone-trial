@@ -81,22 +81,41 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-    - name: Delete VPCs
+    - name: Delete VPC Dependencies
       run: |
         VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=group-3-vpc-netflix-clone-dev-*" --query "Vpcs[].VpcId" --output text)
         for VPC_ID in $VPC_IDS; do
-          # Delete dependent resources
+          # Detach and delete Internet Gateways
+          IGW_IDS=$(aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$VPC_ID" --query "InternetGateways[].InternetGatewayId" --output text)
+          for IGW_ID in $IGW_IDS; do
+            aws ec2 detach-internet-gateway --internet-gateway-id $IGW_ID --vpc-id $VPC_ID
+            aws ec2 delete-internet-gateway --internet-gateway-id $IGW_ID
+          done
+
+          # Delete Route Table Associations and Route Tables
+          RTB_IDS=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$VPC_ID" --query "RouteTables[].RouteTableId" --output text)
+          for RTB_ID in $RTB_IDS; do
+            RTB_ASSOCIATION_IDS=$(aws ec2 describe-route-tables --route-table-ids $RTB_ID --query "RouteTables[].Associations[].RouteTableAssociationId" --output text)
+            for RTB_ASSOCIATION_ID in $RTB_ASSOCIATION_IDS; do
+              aws ec2 disassociate-route-table --association-id $RTB_ASSOCIATION_ID
+            done
+            aws ec2 delete-route-table --route-table-id $RTB_ID
+          done
+
+          # Delete Network Interfaces
+          NIC_IDS=$(aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$VPC_ID" --query "NetworkInterfaces[].NetworkInterfaceId" --output text)
+          for NIC_ID in $NIC_IDS; do
+            aws ec2 delete-network-interface --network-interface-id $NIC_ID
+          done
+
+          # Delete Subnets
           SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" --query "Subnets[].SubnetId" --output text)
           for SUBNET_ID in $SUBNET_IDS; do
             aws ec2 delete-subnet --subnet-id $SUBNET_ID
           done
 
-          RTB_IDS=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$VPC_ID" --query "RouteTables[].RouteTableId" --output text)
-          for RTB_ID in $RTB_IDS; do
-            aws ec2 delete-route-table --route-table-id $RTB_ID
-          done
-
-          SG_IDS=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" --query "SecurityGroups[].GroupId" --output text)
+          # Delete Security Groups
+          SG_IDS=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" --query "SecurityGroups[?GroupName!='default'].GroupId" --output text)
           for SG_ID in $SG_IDS; do
             aws ec2 delete-security-group --group-id $SG_ID
           done
