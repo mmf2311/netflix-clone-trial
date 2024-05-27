@@ -112,3 +112,15 @@ resource "aws_iam_role_policy_attachment" "eks_service_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSServicePolicy"
   role       = aws_iam_role.eks_cluster_role.name
 }
+
+output "cluster_name" {
+  value = aws_eks_cluster.eks_cluster.id
+}
+
+output "ecr_repository_url" {
+  value = aws_ecr_repository.netflix_clone.repository_url
+}
+
+output "kubeconfig" {
+  value = aws_eks_cluster.eks_cluster.endpoint
+}
