@@ -1,16 +1,12 @@
-from flask import Flask, jsonify, request
-import os
+from flask import Flask, request, jsonify
 from utils import get_movie_data
 
 app = Flask(__name__)
 
-@app.route('/movies')
-def get_movies():
+@app.route('/movies', methods=['GET'])
+def movies():
     title = request.args.get('title')
-    if title:
-        data = get_movie_data(title)
-    else:
-        data = {"error": "Please provide a movie title."}
+    data = get_movie_data(title)
     return jsonify(data)
 
 if __name__ == '__main__':

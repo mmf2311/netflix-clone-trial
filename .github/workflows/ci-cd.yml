@@ -63,7 +63,6 @@ jobs:
     - name: Generate kubeconfig
       if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/stage' || github.ref == 'refs/heads/prod'
       run: |
-        echo "${{ secrets.KUBECONFIG }}" | base64 --decode > $HOME/.kube/config
         aws eks update-kubeconfig --name group-3-eks-netflix-clone-${{ github.ref_name }} --region ${{ secrets.AWS_REGION }}
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -74,4 +73,4 @@ jobs:
       if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/stage' || github.ref == 'refs/heads/prod'
       run: kubectl apply -f kubernetes/deployment.yml --validate=false
       env:
-        KUBECONFIG: $HOME/.kube/config
+        KUBECONFIG: ${{ secrets.KUBECONFIG }}

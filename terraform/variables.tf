@@ -1,15 +1,16 @@
-variable "aws_region" {
-  description = "The AWS region to deploy to"
-  type        = string
-  default     = "us-east-1"  # or any default region you prefer
+variable "branch_name" {
+  description = "The name of the Git branch."
 }
 
-variable "branch_name" {
-  description = "The branch name"
-  type        = string
+variable "aws_region" {
+  description = "AWS region."
 }
 
 variable "tmdb_api_key" {
-  description = "TMDB API key"
-  type        = string
+  description = "TMDB API key."
+}
+
+variable "timestamp" {
+  description = "Timestamp for resource naming."
+  default     = "20240527-024209"
 }
