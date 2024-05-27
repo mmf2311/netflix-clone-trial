@@ -20,12 +20,21 @@ resource "aws_vpc" "netflix_clone_vpc" {
   }
 }
 
-resource "aws_subnet" "netflix_clone_subnet" {
+resource "aws_subnet" "netflix_clone_subnet_1" {
   vpc_id            = aws_vpc.netflix_clone_vpc.id
   cidr_block        = "10.0.1.0/24"
   availability_zone = "us-east-1a"
   tags = {
-    Name = "group-3-subnet-netflix-clone-${var.branch_name}-${local.timestamp}"
+    Name = "group-3-subnet1-netflix-clone-${var.branch_name}-${local.timestamp}"
+  }
+}
+
+resource "aws_subnet" "netflix_clone_subnet_2" {
+  vpc_id            = aws_vpc.netflix_clone_vpc.id
+  cidr_block        = "10.0.2.0/24"
+  availability_zone = "us-east-1b"
+  tags = {
+    Name = "group-3-subnet2-netflix-clone-${var.branch_name}-${local.timestamp}"
   }
 }
 
@@ -33,7 +42,10 @@ resource "aws_eks_cluster" "eks_cluster" {
   name     = "group-3-eks-netflix-clone-${var.branch_name}-${local.timestamp}"
   role_arn = aws_iam_role.eks_cluster_role.arn
   vpc_config {
-    subnet_ids = [aws_subnet.netflix_clone_subnet.id]
+    subnet_ids = [
+      aws_subnet.netflix_clone_subnet_1.id,
+      aws_subnet.netflix_clone_subnet_2.id
+    ]
   }
 }
 
@@ -108,7 +120,10 @@ resource "aws_ecs_service" "netflix_clone_service" {
   desired_count   = 1
   launch_type     = "FARGATE"
   network_configuration {
-    subnets = [aws_subnet.netflix_clone_subnet.id]
+    subnets = [
+      aws_subnet.netflix_clone_subnet_1.id,
+      aws_subnet.netflix_clone_subnet_2.id
+    ]
     assign_public_ip = true
   }
 }
