@@ -29,22 +29,37 @@ jobs:
         TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
         TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
 
-    - name: Delete EKS Cluster
+    - name: Delete ECS Services
       run: |
-        CLUSTER_NAMES=$(aws eks list-clusters --query "clusters[?starts_with(@, 'group-3-eks-netflix-clone-dev')].{Name: @}" --output text)
-        for CLUSTER_NAME in $CLUSTER_NAMES; do
-          aws eks delete-cluster --name $CLUSTER_NAME || true
+        CLUSTER_NAMES=$(aws ecs list-clusters --query "clusterArns[?contains(@, 'group-3-ecs-cluster-netflix-clone-dev')]" --output text)
+        for CLUSTER_ARN in $CLUSTER_NAMES; do
+          SERVICE_ARNS=$(aws ecs list-services --cluster $CLUSTER_ARN --query "serviceArns" --output text)
+          for SERVICE_ARN in $SERVICE_ARNS; do
+            aws ecs update-service --cluster $CLUSTER_ARN --service $SERVICE_ARN --desired-count 0
+            aws ecs delete-service --cluster $CLUSTER_ARN --service $SERVICE_ARN || true
+          done
         done
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-    - name: Delete ECS Cluster
+    - name: Delete ECS Clusters
       run: |
         CLUSTER_NAMES=$(aws ecs list-clusters --query "clusterArns[?contains(@, 'group-3-ecs-cluster-netflix-clone-dev')]" --output text)
+        for CLUSTER_ARN in $CLUSTER_NAMES; do
+          aws ecs delete-cluster --cluster $CLUSTER_ARN || true
+        done
+      env:
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+    - name: Delete EKS Cluster
+      run: |
+        CLUSTER_NAMES=$(aws eks list-clusters --query "clusters[?starts_with(@, 'group-3-eks-netflix-clone-dev')].{Name: @}" --output text)
         for CLUSTER_NAME in $CLUSTER_NAMES; do
-          aws ecs delete-cluster --cluster $CLUSTER_NAME || true
+          aws eks delete-cluster --name $CLUSTER_NAME || true
         done
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
