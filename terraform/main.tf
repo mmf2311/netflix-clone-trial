@@ -1,5 +1,5 @@
 locals {
-  timestamp = replace(formatdate("YYYYMMDD-HHmmss", time()), ":", "")
+  timestamp = replace(formatdate("YYYYMMDD-HHmmss", timestamp()), ":", "")
 }
 
 resource "aws_vpc" "netflix_clone_vpc" {
