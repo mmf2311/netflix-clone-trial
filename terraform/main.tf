@@ -9,11 +9,21 @@ resource "aws_vpc" "netflix_clone_vpc" {
   }
 }
 
-resource "aws_subnet" "netflix_clone_subnet" {
-  vpc_id     = aws_vpc.netflix_clone_vpc.id
-  cidr_block = "10.0.1.0/24"
+resource "aws_subnet" "netflix_clone_subnet_a" {
+  vpc_id            = aws_vpc.netflix_clone_vpc.id
+  cidr_block        = "10.0.1.0/24"
+  availability_zone = "${var.aws_region}a"
   tags = {
-    Name = "group-3-subnet-netflix-clone-${var.branch_name}-${local.timestamp}"
+    Name = "group-3-subnet-a-netflix-clone-${var.branch_name}-${local.timestamp}"
+  }
+}
+
+resource "aws_subnet" "netflix_clone_subnet_b" {
+  vpc_id            = aws_vpc.netflix_clone_vpc.id
+  cidr_block        = "10.0.2.0/24"
+  availability_zone = "${var.aws_region}b"
+  tags = {
+    Name = "group-3-subnet-b-netflix-clone-${var.branch_name}-${local.timestamp}"
   }
 }
 
@@ -81,7 +91,10 @@ resource "aws_eks_cluster" "eks_cluster" {
   name = "group-3-eks-netflix-clone-${var.branch_name}-${local.timestamp}"
   role_arn = aws_iam_role.eks_cluster_role.arn
   vpc_config {
-    subnet_ids = [aws_subnet.netflix_clone_subnet.id, aws_subnet.netflix_clone_subnet.id]
+    subnet_ids = [
+      aws_subnet.netflix_clone_subnet_a.id,
+      aws_subnet.netflix_clone_subnet_b.id
+    ]
   }
 }
 
