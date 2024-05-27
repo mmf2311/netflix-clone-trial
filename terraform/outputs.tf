@@ -1,5 +1,5 @@
 output "cluster_name" {
-  value = aws_eks_cluster.eks_cluster.name
+  value = aws_eks_cluster.eks_cluster.id
 }
 
 output "ecr_repository_url" {
