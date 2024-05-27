@@ -83,20 +83,30 @@ jobs:
             aws ec2 delete-internet-gateway --internet-gateway-id $igw
           done
 
-          # Delete route table associations
+          # Delete route table associations and non-main route tables
           RTB_IDS=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc" --query "RouteTables[].RouteTableId" --output text)
           for rtb in $RTB_IDS; do
             ASSOCIATION_IDS=$(aws ec2 describe-route-tables --route-table-ids $rtb --query "RouteTables[].Associations[].RouteTableAssociationId" --output text)
             for assoc in $ASSOCIATION_IDS; do
               aws ec2 disassociate-route-table --association-id $assoc || true
             done
-            aws ec2 delete-route-table --route-table-id $rtb
+            # Only delete non-main route tables
+            MAIN_RT=$(aws ec2 describe-route-tables --route-table-ids $rtb --query "RouteTables[].Associations[?Main].RouteTableAssociationId" --output text)
+            if [ -z "$MAIN_RT" ]; then
+              aws ec2 delete-route-table --route-table-id $rtb
+            fi
           done
 
           # Delete subnets
           SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$vpc" --query "Subnets[].SubnetId" --output text)
           for subnet in $SUBNET_IDS; do
             aws ec2 delete-subnet --subnet-id $subnet
+          done
+
+          # Delete network interfaces
+          ENI_IDS=$(aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$vpc" --query "NetworkInterfaces[].NetworkInterfaceId" --output text)
+          for eni in $ENI_IDS; do
+            aws ec2 delete-network-interface --network-interface-id $eni
           done
 
           # Delete security groups
