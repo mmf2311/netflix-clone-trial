@@ -27,6 +27,10 @@ jobs:
       run: |
         CLUSTER_NAMES=$(aws ecs list-clusters --query "clusterArns[?contains(@, 'group-3-ecs-cluster-netflix-clone-dev')]" --output text)
         for CLUSTER in $CLUSTER_NAMES; do
+          SERVICE_NAMES=$(aws ecs list-services --cluster $CLUSTER --query "serviceArns" --output text)
+          for SERVICE in $SERVICE_NAMES; do
+            aws ecs delete-service --cluster $CLUSTER --service $SERVICE --force
+          done
           aws ecs delete-cluster --cluster $CLUSTER
         done
       env:
@@ -67,7 +71,9 @@ jobs:
           done
           ROUTE_TABLE_IDS=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$VPC_ID" --query "RouteTables[].RouteTableId" --output text)
           for ROUTE_TABLE_ID in $ROUTE_TABLE_IDS; do
-            aws ec2 delete-route-table --route-table-id $ROUTE_TABLE_ID
+            if [ $(aws ec2 describe-route-tables --route-table-ids $ROUTE_TABLE_ID --query "RouteTables[].Associations[].Main" --output text) == "false" ]; then
+              aws ec2 delete-route-table --route-table-id $ROUTE_TABLE_ID
+            fi
           done
           SECURITY_GROUP_IDS=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" --query "SecurityGroups[?GroupName!='default'].GroupId" --output text)
           for SECURITY_GROUP_ID in $SECURITY_GROUP_IDS; do
