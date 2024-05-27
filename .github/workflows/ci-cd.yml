@@ -64,9 +64,11 @@ jobs:
       if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/stage' || github.ref == 'refs/heads/prod'
       run: |
         mkdir -p $HOME/.kube
-        echo "${{ secrets.KUBECONFIG }}" | base64 --decode > $HOME/.kube/config
+        aws eks update-kubeconfig --name group-3-eks-netflix-clone-${{ github.ref_name }}-${{ github.run_id }} --region ${{ secrets.AWS_REGION }}
       env:
-        KUBECONFIG: ${{ secrets.KUBECONFIG }}
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
     - name: Deploy to Kubernetes
       if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/stage' || github.ref == 'refs/heads/prod'

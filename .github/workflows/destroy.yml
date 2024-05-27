@@ -2,6 +2,11 @@ name: Destroy AWS Resources
 
 on:
   workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch name to destroy resources for'
+        required: true
+        default: 'dev'
 
 jobs:
   destroy:
@@ -11,11 +16,18 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
 
-    - name: Terraform Init and Destroy
+    - name: Set up AWS CLI
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Destroy Terraform managed infrastructure
       run: |
         cd terraform
         terraform init
-        terraform destroy -auto-approve -var branch_name=${{ github.ref_name }}
+        terraform destroy -auto-approve -var branch_name=${{ github.event.inputs.branch }}
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -23,37 +35,30 @@ jobs:
         TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
         TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
 
-    - name: Delete ECS Clusters
-      run: |
-        CLUSTER_NAMES=$(aws ecs list-clusters --query "clusterArns[?contains(@, 'group-3-ecs-cluster-netflix-clone-dev')]" --output text)
-        for CLUSTER in $CLUSTER_NAMES; do
-          SERVICE_NAMES=$(aws ecs list-services --cluster $CLUSTER --query "serviceArns" --output text)
-          for SERVICE in $SERVICE_NAMES; do
-            aws ecs delete-service --cluster $CLUSTER --service $SERVICE --force
-          done
-          aws ecs delete-cluster --cluster $CLUSTER
-        done
-      env:
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
     - name: Delete EKS Clusters
       run: |
-        CLUSTER_NAMES=$(aws eks list-clusters --query "clusters[?contains(@, 'group-3-eks-netflix-clone-dev')]" --output text)
-        for CLUSTER in $CLUSTER_NAMES; do
-          aws eks delete-cluster --name $CLUSTER
+        CLUSTER_NAMES=$(aws eks list-clusters --query "clusters[?contains(@, 'group-3-eks-netflix-clone-${{ github.event.inputs.branch }}')]" --output text)
+        for cluster in $CLUSTER_NAMES; do
+          aws eks delete-cluster --name $cluster
         done
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-    - name: Delete ECR Repositories
+    - name: Delete ECS Clusters
       run: |
-        REPOSITORIES=$(aws ecr describe-repositories --query "repositories[?contains(repositoryName, 'group-3-ecr-netflix-clone-dev')].repositoryName" --output text)
-        for REPO in $REPOSITORIES; do
-          aws ecr delete-repository --repository-name $REPO --force
+        CLUSTER_NAMES=$(aws ecs list-clusters --query "clusterArns[?contains(@, 'group-3-ecs-cluster-netflix-clone-${{ github.event.inputs.branch }}')]" --output text)
+        for cluster in $CLUSTER_NAMES; do
+          SERVICES=$(aws ecs list-services --cluster $cluster --query "serviceArns" --output text)
+          for service in $SERVICES; do
+            aws ecs delete-service --cluster $cluster --service $service --force
+          done
+          TASKS=$(aws ecs list-tasks --cluster $cluster --query "taskArns" --output text)
+          for task in $TASKS; do
+            aws ecs stop-task --cluster $cluster --task $task
+          done
+          aws ecs delete-cluster --cluster $cluster
         done
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -62,24 +67,14 @@ jobs:
 
     - name: Delete VPCs
       run: |
-        VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=group-3-vpc-netflix-clone-dev-*" --query "Vpcs[].VpcId" --output text)
-        for VPC_ID in $VPC_IDS; do
-          echo "Deleting dependencies for VPC: $VPC_ID"
-          SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" --query "Subnets[].SubnetId" --output text)
-          for SUBNET_ID in $SUBNET_IDS; do
-            aws ec2 delete-subnet --subnet-id $SUBNET_ID
-          done
-          ROUTE_TABLE_IDS=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$VPC_ID" --query "RouteTables[].RouteTableId" --output text)
-          for ROUTE_TABLE_ID in $ROUTE_TABLE_IDS; do
-            if [ $(aws ec2 describe-route-tables --route-table-ids $ROUTE_TABLE_ID --query "RouteTables[].Associations[].Main" --output text) == "false" ]; then
-              aws ec2 delete-route-table --route-table-id $ROUTE_TABLE_ID
-            fi
-          done
-          SECURITY_GROUP_IDS=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" --query "SecurityGroups[?GroupName!='default'].GroupId" --output text)
-          for SECURITY_GROUP_ID in $SECURITY_GROUP_IDS; do
-            aws ec2 delete-security-group --group-id $SECURITY_GROUP_ID
-          done
-          aws ec2 delete-vpc --vpc-id $VPC_ID
+        VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=group-3-vpc-netflix-clone-${{ github.event.inputs.branch }}-*" --query "Vpcs[].VpcId" --output text)
+        for vpc in $VPC_IDS; do
+          aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc" --query "RouteTables[].RouteTableId" --output text | xargs -I {} aws ec2 delete-route-table --route-table-id {}
+          aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$vpc" --query "InternetGateways[].InternetGatewayId" --output text | xargs -I {} aws ec2 detach-internet-gateway --internet-gateway-id {} --vpc-id $vpc
+          aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$vpc" --query "InternetGateways[].InternetGatewayId" --output text | xargs -I {} aws ec2 delete-internet-gateway --internet-gateway-id {}
+          aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$vpc" --query "SecurityGroups[].GroupId" --output text | xargs -I {} aws ec2 delete-security-group --group-id {}
+          aws ec2 describe-subnets --filters "Name=vpc-id,Values=$vpc" --query "Subnets[].SubnetId" --output text | xargs -I {} aws ec2 delete-subnet --subnet-id {}
+          aws ec2 delete-vpc --vpc-id $vpc
         done
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
