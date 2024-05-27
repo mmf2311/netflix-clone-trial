@@ -45,6 +45,17 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
+    - name: Delete ECR Repositories
+      run: |
+        REPOSITORIES=$(aws ecr describe-repositories --query "repositories[?contains(repositoryName, 'group-3-ecr-netflix-clone-dev')].repositoryName" --output text)
+        for REPO in $REPOSITORIES; do
+          aws ecr delete-repository --repository-name $REPO --force
+        done
+      env:
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
     - name: Delete VPCs
       run: |
         VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=group-3-vpc-netflix-clone-dev-*" --query "Vpcs[].VpcId" --output text)
