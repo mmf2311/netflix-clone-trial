@@ -5,3 +5,7 @@ output "ecr_repository_url" {
 output "cluster_name" {
   value = aws_ecs_cluster.netflix_clone_cluster.name
 }
+
+output "kubeconfig" {
+  value = aws_eks_cluster.eks_cluster.endpoint
+}

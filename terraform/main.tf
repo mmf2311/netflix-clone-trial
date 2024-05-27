@@ -1,5 +1,5 @@
 locals {
-  timestamp = regex_replace(formatdate("YYYYMMDD-HHMMSS", time()), ":", "")
+  timestamp = replace(formatdate("YYYYMMDD-HHMMSS", time()), ":", "")
 }
 
 resource "aws_vpc" "netflix_clone_vpc" {
@@ -79,4 +79,3 @@ resource "aws_subnet" "subnet" {
   vpc_id     = aws_vpc.netflix_clone_vpc.id
   cidr_block = "10.0.1.0/24"
 }
-
