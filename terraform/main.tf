@@ -66,6 +66,17 @@ resource "aws_ecs_task_definition" "netflix_clone_task" {
   }])
 }
 
+data "aws_iam_policy_document" "eks_cluster_assume_role_policy" {
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["eks.amazonaws.com"]
+    }
+  }
+}
+
 resource "aws_eks_cluster" "eks_cluster" {
   name = "group-3-eks-netflix-clone-${var.branch_name}-${local.timestamp}"
   role_arn = aws_iam_role.eks_cluster_role.arn
