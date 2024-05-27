@@ -1,5 +1,5 @@
 locals {
-  timestamp = replace(timestamp(), ":", "")
+  timestamp = replace(formatdate("YYYYMMDD-HHmmss", timestamp()), ":", "")
 }
 
 resource "aws_vpc" "netflix_clone_vpc" {
@@ -45,7 +45,7 @@ resource "aws_eks_cluster" "eks_cluster" {
   role_arn = aws_iam_role.eks_cluster_role.arn
 
   vpc_config {
-    subnet_ids = aws_subnet.subnet[*].id
+    subnet_ids = [aws_subnet.subnet_a.id, aws_subnet.subnet_b.id]
   }
 }
 
@@ -75,8 +75,23 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
   role       = aws_iam_role.eks_cluster_role.name
 }
 
-resource "aws_subnet" "subnet" {
+resource "aws_subnet" "subnet_a" {
   vpc_id     = aws_vpc.netflix_clone_vpc.id
   cidr_block = "10.0.1.0/24"
+  availability_zone = "us-east-1a"  # Change this to your desired AZ
+
+  tags = {
+    Name = "group-3-subnet-a-netflix-clone-${var.branch_name}-${local.timestamp}"
+  }
+}
+
+resource "aws_subnet" "subnet_b" {
+  vpc_id     = aws_vpc.netflix_clone_vpc.id
+  cidr_block = "10.0.2.0/24"
+  availability_zone = "us-east-1b"  # Change this to your desired AZ
+
+  tags = {
+    Name = "group-3-subnet-b-netflix-clone-${var.branch_name}-${local.timestamp}"
+  }
 }
 
