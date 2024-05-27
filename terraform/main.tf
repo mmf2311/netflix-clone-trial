@@ -1,5 +1,16 @@
 locals {
-  timestamp = replace(timestamp(), ":", "")
+  timestamp = replace(formatdate("YYYYMMDD-HHmmss", timestamp()), ":", "")
+}
+
+data "aws_iam_policy_document" "eks_cluster_assume_role_policy" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    effect  = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["eks.amazonaws.com"]
+    }
+  }
 }
 
 resource "aws_vpc" "netflix_clone_vpc" {
