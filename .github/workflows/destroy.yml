@@ -1,10 +1,10 @@
-name: Destroy AWS Resources
+name: Destroy Resources
 
 on:
   workflow_dispatch:
     inputs:
-      branch:
-        description: 'Branch to destroy resources for'
+      branch_name:
+        description: 'Branch name (dev, stage, prod)'
         required: true
         default: 'dev'
 
@@ -16,36 +16,17 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
 
-    - name: Configure AWS credentials
+    - name: Setup AWS CLI
       uses: aws-actions/configure-aws-credentials@v1
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ secrets.AWS_REGION }}
 
-    - name: Destroy EKS Cluster
-      run: |
-        CLUSTER_NAME="group-3-eks-netflix-clone-${{ github.event.inputs.branch }}"
-        if aws eks list-clusters --query "clusters[?contains(@, '${CLUSTER_NAME}')]" --output text | grep -q "${CLUSTER_NAME}"; then
-          aws eks delete-cluster --name $CLUSTER_NAME
-        else
-          echo "EKS Cluster $CLUSTER_NAME does not exist. Skipping deletion."
-        fi
-
-    - name: Delete ECR Repository
-      run: |
-        REPO_NAME="group-3-ecr-netflix-clone-${{ github.event.inputs.branch }}"
-        if aws ecr describe-repositories --query "repositories[?contains(repositoryName, '${REPO_NAME}')]" --output text | grep -q "${REPO_NAME}"; then
-          aws ecr delete-repository --repository-name $REPO_NAME --force
-        else
-          echo "ECR Repository $REPO_NAME does not exist. Skipping deletion."
-        fi
-
-    - name: Destroy Terraform Resources
+    - name: Destroy Terraform resources
       run: |
         cd terraform
-        terraform init
-        terraform destroy -auto-approve -var branch_name=${{ github.event.inputs.branch }}
+        terraform destroy -auto-approve -var branch_name=${{ github.event.inputs.branch_name }}
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -53,121 +34,73 @@ jobs:
         TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
         TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
 
-    - name: Delete ECS Cluster
+    - name: Delete EKS Cluster
       run: |
-        CLUSTER_NAME="group-3-ecs-cluster-netflix-clone-${{ github.event.inputs.branch }}"
-        if aws ecs list-clusters --query "clusterArns[?contains(@, '${CLUSTER_NAME}')]" --output text | grep -q "${CLUSTER_NAME}"; then
-          aws ecs delete-cluster --cluster $CLUSTER_NAME
-        else
-          echo "ECS Cluster $CLUSTER_NAME does not exist. Skipping deletion."
+        CLUSTER_NAME="group-3-eks-netflix-clone-${{ github.event.inputs.branch_name }}-*"
+        if aws eks describe-cluster --name ${CLUSTER_NAME}; then
+          aws eks delete-cluster --name ${CLUSTER_NAME}
         fi
+      env:
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-    - name: Delete ECS Task Definitions
+    - name: Delete ECR Repository
       run: |
-        TASK_DEFINITIONS=$(aws ecs list-task-definitions --query "taskDefinitionArns[?contains(@, 'group-3-ecs-task-netflix-clone-${{ github.event.inputs.branch }}')]" --output text)
-        if [ -z "$TASK_DEFINITIONS" ]; then
-          echo "No ECS Task Definitions found for deletion. Skipping."
-        else
-          for TASK_DEFINITION in $TASK_DEFINITIONS; do
-            echo "Deregistering Task Definition: $TASK_DEFINITION"
-            aws ecs deregister-task-definition --task-definition $TASK_DEFINITION
-          done
+        REPO_NAME="group-3-ecr-netflix-clone-${{ github.event.inputs.branch_name }}-*"
+        if aws ecr describe-repositories --repository-names ${REPO_NAME}; then
+          aws ecr delete-repository --repository-name ${REPO_NAME} --force
         fi
+      env:
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+    - name: Delete ECS Cluster and Task Definitions
+      run: |
+        CLUSTER_NAME="group-3-ecs-cluster-netflix-clone-${{ github.event.inputs.branch_name }}-*"
+        SERVICE_NAME="group-3-ecs-service-netflix-clone-${{ github.event.inputs.branch_name }}-*"
+        if aws ecs describe-clusters --clusters ${CLUSTER_NAME}; then
+          aws ecs delete-service --cluster ${CLUSTER_NAME} --service ${SERVICE_NAME} --force
+          aws ecs delete-cluster --cluster ${CLUSTER_NAME}
+        fi
+      env:
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
     - name: Detach and Delete Internet Gateways
       run: |
-        IGW_IDS=$(aws ec2 describe-internet-gateways --filters "Name=tag:Name,Values=group-3-igw-netflix-clone-${{ github.event.inputs.branch }}-*" --query "InternetGateways[].InternetGatewayId" --output text)
-        if [ -z "$IGW_IDS" ]; then
-          echo "No Internet Gateways found for deletion. Skipping."
-        else
-          for IGW_ID in $IGW_IDS; do
-            echo "Detaching and deleting Internet Gateway: $IGW_ID"
-            VPC_ID=$(aws ec2 describe-internet-gateways --internet-gateway-ids $IGW_ID --query "InternetGateways[0].Attachments[0].VpcId" --output text)
-            aws ec2 detach-internet-gateway --internet-gateway-id $IGW_ID --vpc-id $VPC_ID
-            aws ec2 delete-internet-gateway --internet-gateway-id $IGW_ID
+        VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=group-3-vpc-netflix-clone-${{ github.event.inputs.branch_name }}-*" --query "Vpcs[].VpcId" --output text)
+        for VPC_ID in ${VPC_IDS}; do
+          IGW_IDS=$(aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=${VPC_ID}" --query "InternetGateways[].InternetGatewayId" --output text)
+          for IGW_ID in ${IGW_IDS}; do
+            aws ec2 detach-internet-gateway --internet-gateway-id ${IGW_ID} --vpc-id ${VPC_ID}
+            aws ec2 delete-internet-gateway --internet-gateway-id ${IGW_ID}
           done
-        fi
+        done
+      env:
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-    - name: Delete Subnets
+    - name: Delete Subnets, Route Tables, and VPCs
       run: |
-        SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=group-3-subnet-netflix-clone-${{ github.event.inputs.branch }}-*" --query "Subnets[].SubnetId" --output text)
-        if [ -z "$SUBNET_IDS" ]; then
-          echo "No Subnets found for deletion. Skipping."
-        else
-          for SUBNET_ID in $SUBNET_IDS; do
-            echo "Deleting Subnet: $SUBNET_ID"
-            aws ec2 delete-subnet --subnet-id $SUBNET_ID
+        VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=group-3-vpc-netflix-clone-${{ github.event.inputs.branch_name }}-*" --query "Vpcs[].VpcId" --output text)
+        for VPC_ID in ${VPC_IDS}; do
+          SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=${VPC_ID}" --query "Subnets[].SubnetId" --output text)
+          for SUBNET_ID in ${SUBNET_IDS}; do
+            aws ec2 delete-subnet --subnet-id ${SUBNET_ID}
           done
-        fi
 
-    - name: Delete Route Tables
-      run: |
-        RT_IDS=$(aws ec2 describe-route-tables --filters "Name=tag:Name,Values=group-3-rt-netflix-clone-${{ github.event.inputs.branch }}-*" --query "RouteTables[].RouteTableId" --output text)
-        if [ -z "$RT_IDS" ]; then
-          echo "No Route Tables found for deletion. Skipping."
-        else
-          for RT_ID in $RT_IDS; do
-            echo "Deleting Route Table: $RT_ID"
-            aws ec2 delete-route-table --route-table-id $RT_ID
+          ROUTE_TABLE_IDS=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=${VPC_ID}" --query "RouteTables[].RouteTableId" --output text)
+          for RT_ID in ${ROUTE_TABLE_IDS}; do
+            aws ec2 delete-route-table --route-table-id ${RT_ID}
           done
-        fi
 
-    - name: Delete VPCs
-      run: |
-        VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=group-3-vpc-netflix-clone-${{ github.event.inputs.branch }}-*" --query "Vpcs[].VpcId" --output text)
-        if [ -z "$VPC_IDS" ]; then
-          echo "No VPCs found for deletion. Skipping."
-        else
-          for VPC_ID in $VPC_IDS; do
-            echo "Deleting VPC: $VPC_ID"
-            aws ec2 delete-vpc --vpc-id $VPC_ID || echo "Error deleting VPC $VPC_ID. There might be dependencies that need to be deleted first."
-          done
-        fi
-
-    - name: Delete Security Groups
-      run: |
-        SG_IDS=$(aws ec2 describe-security-groups --filters "Name=tag:Name,Values=group-3-sg-netflix-clone-${{ github.event.inputs.branch }}-*" --query "SecurityGroups[].GroupId" --output text)
-        if [ -z "$SG_IDS" ]; then
-          echo "No Security Groups found for deletion. Skipping."
-        else
-          for SG_ID in $SG_IDS; do
-            echo "Deleting Security Group: $SG_ID"
-            aws ec2 delete-security-group --group-id $SG_ID || echo "Error deleting Security Group $SG_ID. There might be dependencies that need to be deleted first."
-          done
-        fi
-
-    - name: Delete Key Pairs
-      run: |
-        KEY_PAIR_NAMES=$(aws ec2 describe-key-pairs --query "KeyPairs[?contains(KeyName, 'group-3-key-netflix-clone-${{ github.event.inputs.branch }}')].KeyName" --output text)
-        if [ -z "$KEY_PAIR_NAMES" ]; then
-          echo "No Key Pairs found for deletion. Skipping."
-        else
-          for KEY_PAIR_NAME in $KEY_PAIR_NAMES; do
-            echo "Deleting Key Pair: $KEY_PAIR_NAME"
-            aws ec2 delete-key-pair --key-name $KEY_PAIR_NAME
-          done
-        fi
-
-    - name: Delete S3 Buckets
-      run: |
-        BUCKET_NAMES=$(aws s3api list-buckets --query "Buckets[?contains(Name, 'group-3-s3-netflix-clone-${{ github.event.inputs.branch }}')].Name" --output text)
-        if [ -z "$BUCKET_NAMES" ]; then
-          echo "No S3 Buckets found for deletion. Skipping."
-        else
-          for BUCKET_NAME in $BUCKET_NAMES; do
-            echo "Deleting S3 Bucket: $BUCKET_NAME"
-            aws s3 rb s3://$BUCKET_NAME --force
-          done
-        fi
-
-    - name: Delete RDS Instances
-      run: |
-        DB_INSTANCE_IDENTIFIERS=$(aws rds describe-db-instances --query "DBInstances[?contains(DBInstanceIdentifier, 'group-3-rds-netflix-clone-${{ github.event.inputs.branch }}')].DBInstanceIdentifier" --output text)
-        if [ -z "$DB_INSTANCE_IDENTIFIERS" ]; then
-          echo "No RDS Instances found for deletion. Skipping."
-        else
-          for DB_INSTANCE_IDENTIFIER in $DB_INSTANCE_IDENTIFIERS; do
-            echo "Deleting RDS Instance: $DB_INSTANCE_IDENTIFIER"
-            aws rds delete-db-instance --db-instance-identifier $DB_INSTANCE_IDENTIFIER --skip-final-snapshot
-          done
-        fi
+          aws ec2 delete-vpc --vpc-id ${VPC_ID}
+        done
+      env:
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
