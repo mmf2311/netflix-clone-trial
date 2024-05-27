@@ -81,20 +81,26 @@ jobs:
             aws ec2 delete-internet-gateway --internet-gateway-id $IGW_ID || true
           done
 
-          # Delete Route Tables
-          RTB_IDS=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$VPC_ID" --query "RouteTables[].RouteTableId" --output text)
-          for RTB_ID in $RTB_IDS; do
-            aws ec2 delete-route-table --route-table-id $RTB_ID || true
-          done
-
           # Delete Network Interfaces
           ENI_IDS=$(aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$VPC_ID" --query "NetworkInterfaces[].NetworkInterfaceId" --output text)
           for ENI_ID in $ENI_IDS; do
             aws ec2 delete-network-interface --network-interface-id $ENI_ID || true
           done
 
+          # Delete Route Table Associations
+          RTB_ASSOC_IDS=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$VPC_ID" --query "RouteTables[].Associations[].RouteTableAssociationId" --output text)
+          for RTB_ASSOC_ID in $RTB_ASSOC_IDS; do
+            aws ec2 disassociate-route-table --association-id $RTB_ASSOC_ID || true
+          done
+
+          # Delete Route Tables
+          RTB_IDS=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$VPC_ID" --query "RouteTables[].RouteTableId" --output text)
+          for RTB_ID in $RTB_IDS; do
+            aws ec2 delete-route-table --route-table-id $RTB_ID || true
+          done
+
           # Delete Security Groups
-          SG_IDS=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" --query "SecurityGroups[].GroupId" --output text)
+          SG_IDS=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" --query "SecurityGroups[?GroupName!='default'].GroupId" --output text)
           for SG_ID in $SG_IDS; do
             aws ec2 delete-security-group --group-id $SG_ID || true
           done
