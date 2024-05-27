@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: netflix-clone
-        image: ***.dkr.ecr.***.amazonaws.com/group-3-ecr-netflix-clone:latest
+        image: <YOUR_AWS_ACCOUNT_ID>.dkr.ecr.<YOUR_AWS_REGION>.amazonaws.com/group-3-ecr-netflix-clone:${GITHUB_RUN_ID}
         ports:
         - containerPort: 5000
         env:
@@ -26,8 +26,8 @@ spec:
         resources:
           limits:
             memory: "512Mi"
-            cpu: "0.5"
+            cpu: "500m"
           requests:
             memory: "256Mi"
-            cpu: "0.25"
+            cpu: "250m"
       restartPolicy: Always
