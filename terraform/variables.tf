@@ -9,8 +9,3 @@ variable "aws_region" {
 variable "tmdb_api_key" {
   description = "TMDB API key."
 }
-
-variable "timestamp" {
-  description = "Timestamp for resource naming."
-  default     = "20240527-024209"
-}
