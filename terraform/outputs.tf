@@ -15,8 +15,5 @@ output "vpc_id" {
 }
 
 output "subnet_ids" {
-  value = [
-    aws_subnet.netflix_clone_subnet_1.id,
-    aws_subnet.netflix_clone_subnet_2.id
-  ]
+  value = [aws_subnet.netflix_clone_subnet_1.id, aws_subnet.netflix_clone_subnet_2.id]
 }
