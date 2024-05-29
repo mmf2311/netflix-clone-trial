@@ -62,6 +62,7 @@ jobs:
         TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
 
     - name: Export Terraform Outputs
+      id: export-outputs
       run: |
         echo "cluster_name=$(terraform output -raw cluster_name)" >> $GITHUB_ENV
         echo "ecr_repository_url=$(terraform output -raw ecr_repository_url)" >> $GITHUB_ENV
