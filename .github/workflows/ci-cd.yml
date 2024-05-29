@@ -73,6 +73,16 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
+    - name: Debugging Print Environment Variables
+      run: |
+        echo "Cluster Name: ${{ env.cluster_name }}"
+        echo "VPC ID: ${{ env.vpc_id }}"
+        echo "Subnet IDs: ${{ env.subnet_ids }}"
+      env:
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
     - name: Tag Subnets for Load Balancer
       run: |
         SUBNET_IDS=$(echo ${{ env.subnet_ids }} | jq -r '.[]')
