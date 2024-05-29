@@ -31,8 +31,8 @@ jobs:
 
     - name: Create ECR repository if it doesn't exist
       run: |
-        aws ecr describe-repositories --repository-names group-3-ecr-netflix-clone || \
-        aws ecr create-repository --repository-name group-3-ecr-netflix-clone
+        aws ecr describe-repositories --repository-names group-3-ecr-netflix-clone-${{ github.ref_name }}-${{ github.run_id }} || \
+        aws ecr create-repository --repository-name group-3-ecr-netflix-clone-${{ github.ref_name }}-${{ github.run_id }}
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -45,8 +45,8 @@ jobs:
         context: ./backend
         file: ./backend/Dockerfile
         push: true
-        tags: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-ecr-netflix-clone:${{ github.sha }}
-
+        tags: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/group-3-ecr-netflix-clone-${{ github.ref_name }}-${{ github.run_id }}:latest
+        
     - name: Terraform Init and Apply
       if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/stage' || github.ref == 'refs/heads/prod'
       id: terraform
@@ -61,6 +61,19 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
         TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
+
+
+    - name: Tag Subnets for Load Balancer
+      run: |
+        SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$(terraform output -raw vpc_id)" --query "Subnets[].SubnetId" --output text)
+        for subnet in $SUBNET_IDS; do
+          aws ec2 create-tags --resources $subnet --tags Key=kubernetes.io/cluster/$(terraform output -raw cluster_name),Value=shared
+          aws ec2 create-tags --resources $subnet --tags Key=kubernetes.io/role/elb,Value=1
+        done
+      env:
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}        
 
     - name: Generate kubeconfig
       if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/stage' || github.ref == 'refs/heads/prod'

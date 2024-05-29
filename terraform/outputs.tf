@@ -9,3 +9,7 @@ output "ecr_repository_url" {
 output "kubeconfig" {
   value = aws_eks_cluster.eks_cluster.endpoint
 }
+
+output "vpc_id" {
+  value = aws_vpc.netflix_clone_vpc.id
+}
