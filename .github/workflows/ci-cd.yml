@@ -65,7 +65,6 @@ jobs:
       id: export-outputs
       run: |
         echo "cluster_name=$(terraform output -raw cluster_name)" >> $GITHUB_ENV
-        echo "ecr_repository_url=$(terraform output -raw ecr_repository_url)" >> $GITHUB_ENV
         echo "kubeconfig=$(terraform output -raw kubeconfig)" >> $GITHUB_ENV
         echo "vpc_id=$(terraform output -raw vpc_id)" >> $GITHUB_ENV
         echo "subnet_ids=$(terraform output -json subnet_ids | jq -r '.[]')" >> $GITHUB_ENV

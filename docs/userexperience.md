@@ -1,153 +1,104 @@
-# User Experience Overview
+# User Experience Testing Guide for Backend Application
 
-## Introduction
-This document provides an overview of what end users can expect when accessing the Netflix clone application. The application offers various features for browsing, searching, and managing movies, as well as user authentication and personalized experiences.
+This document provides a step-by-step guide to test the backend application as an end user using a web browser, Postman, or any HTTP client.
 
-## Features and User Experience
+## Deployment
 
-### Home Page
-- Displays a list of popular movies fetched from the TMDB API.
-- Users can see movie posters, titles, and brief descriptions.
+Ensure your backend application is deployed and running. You should have a load balancer or a public IP address to access the application.
 
-### Search Functionality
-- A search bar allows users to search for movies by title.
-- Search results display matching movies with their posters and titles.
+### Get the Load Balancer URL
 
-### Movie Details Page
-- Clicking on a movie from the home page or search results takes the user to a detailed page.
-- The details page includes the movie's poster, title, release date, rating, overview, and other relevant information.
+Once your application is deployed on AWS, retrieve the URL of the load balancer. This is the public endpoint where your API is accessible.
 
-### User Authentication
-- Users can sign up for a new account or log in with an existing account.
-- Authentication is required to access certain features, like adding movies to a watchlist.
+1. Run the following command to get the load balancer URL:
+    ```bash
+    kubectl get svc netflix-clone-service
+    ```
+   
+    The output should look something like this:
+    ```
+    NAME                    TYPE           CLUSTER-IP      EXTERNAL-IP        PORT(S)        AGE
+    netflix-clone-service   LoadBalancer   172.20.41.228   a1b2c3d4e5f6g7h8   80:32047/TCP   2m18s
+    ```
 
-### User Profile
-- Authenticated users have access to their profile page.
-- Users can view and manage their personal information, such as email and password.
-- Users can view their watchlist, which includes movies they've added.
+2. The `EXTERNAL-IP` (e.g., `a1b2c3d4e5f6g7h8`) is the URL you will use.
 
-### Watchlist
-- Authenticated users can add movies to their watchlist from the movie details page.
-- Users can view their watchlist on their profile page and remove movies if desired.
+## Test the API Endpoints
 
-### Notifications
-- Users receive notifications about new movie releases, updates, or personalized recommendations.
+### Using a Web Browser
 
-## Backend Operations
+Open your web browser and enter the URL of your API endpoint. For example:
+```
+http://a1b2c3d4e5f6g7h8/movies?title=inception
+```
 
-### API Integration
-- The application integrates with the TMDB API to fetch movie data, including popular movies, search results, and movie details.
+You should see a JSON response with the movie data.
 
-### Data Storage
-- User data and watchlists are stored in DynamoDB, a NoSQL database service.
+### Using Postman
 
-### Serverless Functions
-- AWS Lambda functions handle backend logic, such as user authentication, data fetching, and watchlist management.
+1. Open Postman.
+2. Create a new request.
+3. Set the request method to `GET`.
+4. Enter the URL:
+    ```
+    http://a1b2c3d4e5f6g7h8/movies?title=inception
+    ```
+5. Click `Send`.
+6. View the response.
 
-### Containerized Deployment
-- The backend application is containerized using Docker and deployed to AWS ECS, ensuring scalability and reliability.
+## Detailed Example
 
-### CI/CD Pipeline
-- Continuous Integration and Continuous Deployment (CI/CD) pipelines are set up using GitHub Actions to automate testing, building, and deploying the application.
+### 1. Deploy the Backend Application
 
-## Expected Flow for End Users
+Ensure your CI/CD pipeline runs successfully, and the application is deployed on AWS.
 
-### Accessing the Application
-- Users open the web application in their browser, which is served via AWS Route 53 and API Gateway.
+### 2. Get the Load Balancer URL
 
-### Browsing Movies
-- On the home page, users can browse through a list of popular movies.
+Run the following command to get the load balancer URL:
+```bash
+kubectl get svc netflix-clone-service
+```
 
-### Searching for Movies
-- Users can use the search bar to find specific movies by title.
+The output should look something like this:
+```
+NAME                    TYPE           CLUSTER-IP      EXTERNAL-IP        PORT(S)        AGE
+netflix-clone-service   LoadBalancer   172.20.41.228   a1b2c3d4e5f6g7h8   80:32047/TCP   2m18s
+```
 
-### Viewing Movie Details
-- Users can click on any movie to view detailed information.
+The `EXTERNAL-IP` (e.g., `a1b2c3d4e5f6g7h8`) is the URL you will use.
 
-### Creating an Account
-- New users can sign up for an account using their email and a password.
+### 3. Test the API Endpoints
 
-### Logging In
-- Returning users can log in with their credentials.
+#### Using a Web Browser
 
-### Managing Profile and Watchlist
-- Authenticated users can view and update their profile information.
-- Users can add movies to their watchlist from the movie details page and view or manage their watchlist from their profile page.
+Open your web browser and enter the URL:
+``http://a1b2c3d4e5f6g7h8/movies?title=inception``
 
-### Receiving Notifications
-- Users receive notifications about new movies, updates, or personalized recommendations.
+You should see a JSON response with the movie data.
 
-## Security and Reliability
+#### Using Postman
 
-### Authentication
-- Secure user authentication and authorization are implemented to protect user data.
+1. Open Postman.
+2. Create a new request.
+3. Set the request method to `GET`.
+4. Enter the URL:
+    ```
+    http://a1b2c3d4e5f6g7h8/movies?title=inception
+    ```
+5. Click `Send`.
+6. View the response.
 
-### Data Privacy
-- User data is stored securely in DynamoDB, and access is restricted.
+## Common Issues and Troubleshooting
 
-### Scalability
-- The application uses AWS ECS and EC2 to ensure it can handle varying loads.
+- **No External IP:**
+    - If the `EXTERNAL-IP` field is `<pending>`, ensure your Kubernetes cluster has the necessary permissions to create a load balancer.
 
-### Automation
-- CI/CD pipelines automate testing and deployment, ensuring rapid and reliable updates.
+- **403 Forbidden:**
+    - If you receive a `403 Forbidden` error, check your security groups and ensure that the necessary ports (e.g., 80 or 5000) are open.
 
-## Future Enhancements
-
-- **User Reviews and Ratings**: Allow users to leave reviews and rate movies.
-- **Recommendation Engine**: Suggest movies based on user preferences and watch history.
-- **Video Streaming**: Integrate video streaming capabilities directly into the application.
-- **Offline Mode**: Enable users to download movies for offline viewing.
-- **Multi-language Support**: Add support for multiple languages to cater to a broader audience.
+- **Timeouts:**
+    - If the request times out, ensure that your application is running and accessible.
 
 ## Conclusion
-This document provides an overview of the features and user experience of the Netflix clone application. It highlights the key functionalities, backend operations, and the secure and scalable infrastructure supporting the application. Future enhancements aim to further enrich the user experience and expand the application's capabilities.
 
-V2
-
-# User Experience
-
-## Introduction
-This document outlines the user experience for interacting with the Netflix Clone application.
-
-## Features
-1. **Search Movies**
-   - Users can search for movies by title.
-   - The application fetches movie data from the TMDB API and displays it.
-
-## Accessing the Application
-1. **Load Balancer URL**
-   - After deployment, access the application using the Load Balancer DNS name.
-
-2. **Endpoints**
-   - `/movies?title=<movie_title>`: Search for a movie by title.
-
-## Error Handling
-- Proper error messages are displayed if the movie is not found or if there are issues with the API.
-
-## Performance
-- The application is optimized to handle multiple requests simultaneously.
-- Deployed on a scalable Kubernetes cluster to handle varying load
-
-# User Experience
-
-## Introduction
-This document outlines the user experience for interacting with the Netflix Clone application.
-
-## Features
-1. **Search Movies**
-   - Users can search for movies by title.
-   - The application fetches movie data from the TMDB API and displays it.
-
-## Accessing the Application
-1. **Load Balancer URL**
-   - After deployment, access the application using the Load Balancer DNS name.
-
-2. **Endpoints**
-   - `/movies?title=<movie_title>`: Search for a movie by title.
-
-## Error Handling
-- Proper error messages are displayed if the movie is not found or if there are issues with the API.
-
-## Performance
-- The application is optimized to handle multiple requests simultaneously.
-- Deployed on a scalable Kubernetes cluster to handle varying load.
+By following these steps, you can simulate the end-user experience of interacting with your backend application. The key is to ensure your application is accessible via a public URL and that your API endpoints return the expected data.
