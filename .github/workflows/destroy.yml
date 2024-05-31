@@ -97,13 +97,17 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-    - name: Delete IAM Roles
+    - name: Detach IAM Policies and Delete IAM Roles
       run: |
         IAM_ROLES=(
           "ce5-group-3-eks-cluster-role-${{ github.event.inputs.branch }}-netflixclone"
           "ce5-group-3-ecs-task-execution-role-${{ github.event.inputs.branch }}-netflixclone"
         )
         for role in "${IAM_ROLES[@]}"; do
+          POLICY_ARNS=$(aws iam list-attached-role-policies --role-name $role --query "AttachedPolicies[].PolicyArn" --output text)
+          for policy_arn in $POLICY_ARNS; do
+            aws iam detach-role-policy --role-name $role --policy-arn $policy_arn
+          done
           aws iam delete-role --role-name $role
         done
       env:
