@@ -33,7 +33,7 @@ jobs:
           terraform import aws_iam_role.ecs_task_execution_role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ce5-group-3-ecs-task-execution-role-${{ github.ref_name }}-netflixclone
         fi
 
-        terraform apply -auto-approve -var branch_name=${{ github.ref_name }}
+        terraform apply -auto-approve -var "branch_name=${{ github.ref_name }}"
         echo "::set-output name=cluster_name::$(terraform output -raw cluster_name)"
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
