@@ -21,24 +21,18 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1
 
-    - name: Terraform Init and Apply
-      if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/stage' || github.ref == 'refs/heads/prod'
-      id: terraform
-      run: |
-        cd terraform
-        terraform init
-        terraform apply -auto-approve -var branch_name=${{ github.ref_name }}
-        echo "::set-output name=cluster_name::$(terraform output -raw cluster_name)"
+    - name: Login to Amazon ECR
+      id: ecr-login
+      uses: aws-actions/amazon-ecr-login@v1
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
-        TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
 
-    - name: Login to Amazon ECR
-      id: ecr-login
-      uses: aws-actions/amazon-ecr-login@v1
+    - name: Create ECR repository if it doesn't exist
+      run: |
+        aws ecr describe-repositories --repository-names ce5-group-3-ecrrepository-${{ github.ref_name }}-netflixclone || \
+        aws ecr create-repository --repository-name ce5-group-3-ecrrepository-${{ github.ref_name }}-netflixclone
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -52,6 +46,20 @@ jobs:
         file: ./backend/Dockerfile
         push: true
         tags: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/ce5-group-3-ecrrepository-${{ github.ref_name }}-netflixclone:latest
+        
+    - name: Terraform Init and Apply
+      if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/stage' || github.ref == 'refs/heads/prod'
+      id: terraform
+      run: |
+        cd terraform
+        terraform init
+        terraform apply -auto-approve -var branch_name=${{ github.ref_name }}
+      env:
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
+        TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
 
     - name: Export Terraform Outputs
       run: |
@@ -59,7 +67,7 @@ jobs:
         echo "ecr_repository_url=$(terraform output -raw ecr_repository_url)" >> $GITHUB_ENV
         echo "kubeconfig=$(terraform output -raw kubeconfig)" >> $GITHUB_ENV
         echo "vpc_id=$(terraform output -raw vpc_id)" >> $GITHUB_ENV
-        echo "subnet_ids=$(terraform output -raw subnet_ids)" >> $GITHUB_ENV
+        echo "subnet_ids=$(terraform output -json subnet_ids | jq -r '.[]')" >> $GITHUB_ENV
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -67,20 +75,19 @@ jobs:
 
     - name: Tag Subnets for Load Balancer
       run: |
-        SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$(terraform output -raw vpc_id)" --query "Subnets[].SubnetId" --output text)
-        for subnet in $SUBNET_IDS; do
-          aws ec2 create-tags --resources $subnet --tags Key=kubernetes.io/cluster/$(terraform output -raw cluster_name),Value=shared
+        for subnet in ${{ env.subnet_ids }}; do
+          aws ec2 create-tags --resources $subnet --tags Key=kubernetes.io/cluster/${{ env.cluster_name }},Value=shared
           aws ec2 create-tags --resources $subnet --tags Key=kubernetes.io/role/elb,Value=1
         done
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}        
 
     - name: Generate kubeconfig
       if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/stage' || github.ref == 'refs/heads/prod'
       run: |
-        aws eks update-kubeconfig --name ${{ steps.terraform.outputs.cluster_name }} --region ${{ secrets.AWS_REGION }} --kubeconfig /home/runner/.kube/config
+        aws eks update-kubeconfig --name ${{ env.cluster_name }} --region ${{ secrets.AWS_REGION }} --kubeconfig /home/runner/.kube/config
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
