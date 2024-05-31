@@ -59,7 +59,11 @@ resource "aws_iam_role_policy_attachment" "eks_service_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSServicePolicy"
   role       = aws_iam_role.eks_cluster_role.name
 }
- 
+
+resource "aws_ecr_repository" "netflix_clone" {
+  name = "ce5-group-3-ecrrepository-${var.branch_name}-netflixclone"
+}
+
 resource "aws_ecs_cluster" "netflix_clone_cluster" {
   name = "ce5-group-3-ecs-cluster-${var.branch_name}-netflixclone"
 }
