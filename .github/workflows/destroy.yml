@@ -24,6 +24,7 @@ jobs:
         aws-region: ${{ secrets.AWS_REGION }}
 
     - name: Destroy Terraform managed infrastructure
+      continue-on-error: true
       run: |
         cd terraform
         terraform init
@@ -36,6 +37,7 @@ jobs:
         TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
 
     - name: Delete EKS Clusters
+      continue-on-error: true
       run: |
         CLUSTER_NAMES=$(aws eks list-clusters --query "clusters[?contains(@, 'ce5-group-3-ekscluster-${{ github.event.inputs.branch }}')]" --output text)
         for cluster in $CLUSTER_NAMES; do
@@ -47,6 +49,7 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
     - name: Delete ECS Clusters
+      continue-on-error: true
       run: |
         CLUSTER_NAMES=$(aws ecs list-clusters --query "clusterArns[?contains(@, 'ce5-group-3-ecs-cluster-${{ github.event.inputs.branch }}')]" --output text)
         for cluster in $CLUSTER_NAMES; do
@@ -66,6 +69,7 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
     - name: Delete VPCs
+      continue-on-error: true
       run: |
         VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=ce5-group-3-vpc-${{ github.event.inputs.branch }}-netflixclone" --query "Vpcs[].VpcId" --output text)
         for vpc in $VPC_IDS; do
@@ -103,6 +107,7 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
     - name: Delete IAM Roles
+      continue-on-error: true
       run: |
         IAM_ROLES=(
           "ce5-group-3-eks-cluster-role-${{ github.event.inputs.branch }}-netflixclone"
@@ -122,6 +127,7 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
     - name: Delete ECR Repositories
+      continue-on-error: true
       run: |
         aws ecr describe-repositories --query 'repositories[?starts_with(repositoryName, `ce5-group-3-ecrrepository-${{ github.event.inputs.branch }}-netflixclone`)].repositoryName' --output text | tr -d '\r' | xargs -n1 -I{} aws ecr delete-repository --repository-name {} --force
       env:
@@ -130,6 +136,7 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
     - name: Delete ECS Task Definitions
+      continue-on-error: true
       run: |
         TASK_DEFINITION_ARNS=$(aws ecs list-task-definitions --query 'taskDefinitionArns[?contains(@, `ce5-group-3-ecs-task-${{ github.event.inputs.branch }}-netflixclone`)]' --output text)
         for task_definition in $TASK_DEFINITION_ARNS; do
