@@ -61,17 +61,6 @@ jobs:
         TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
         TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
 
-    - name: Export Terraform Outputs
-      run: |
-        echo "cluster_name=$(terraform output -raw cluster_name)" >> $GITHUB_ENV
-        echo "kubeconfig=$(terraform output -raw kubeconfig)" >> $GITHUB_ENV
-        echo "vpc_id=$(terraform output -raw vpc_id)" >> $GITHUB_ENV
-        echo "subnet_ids=$(terraform output -raw subnet_ids)" >> $GITHUB_ENV
-      env:
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
     - name: Tag Subnets for Load Balancer
       run: |
         for subnet in ${{ env.subnet_ids }}; do
