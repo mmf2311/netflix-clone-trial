@@ -1,12 +1,5 @@
-data "aws_iam_policy_document" "eks_cluster_assume_role_policy" {
-  statement {
-    actions = ["sts:AssumeRole"]
-    effect  = "Allow"
-    principals {
-      type        = "Service"
-      identifiers = ["eks.amazonaws.com"]
-    }
-  }
+provider "aws" {
+  region = var.aws_region
 }
 
 resource "aws_vpc" "netflix_clone_vpc" {
@@ -62,6 +55,9 @@ resource "aws_iam_role_policy_attachment" "eks_service_policy" {
 
 resource "aws_ecr_repository" "netflix_clone" {
   name = "ce5-group-3-ecrrepository-${var.branch_name}-netflixclone"
+  lifecycle {
+    ignore_changes = ["repository_url"]
+  }
 }
 
 resource "aws_ecs_cluster" "netflix_clone_cluster" {
