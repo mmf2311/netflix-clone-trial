@@ -12,7 +12,7 @@ data "aws_iam_policy_document" "eks_cluster_assume_role_policy" {
 resource "aws_vpc" "netflix_clone_vpc" {
   cidr_block = "10.0.0.0/16"
   tags = {
-    Name = "CE5-Group-3-VPC-${var.branch_name}-NetflixClone"
+    Name = "ce5-group-3-vpc-${var.branch_name}-netflixclone"
   }
 }
 
@@ -21,7 +21,7 @@ resource "aws_subnet" "netflix_clone_subnet_1" {
   cidr_block        = "10.0.1.0/24"
   availability_zone = "us-east-1a"
   tags = {
-    Name = "CE5-Group-3-Subnet1-${var.branch_name}-NetflixClone"
+    Name = "ce5-group-3-subnet1-${var.branch_name}-netflixclone"
   }
 }
 
@@ -30,12 +30,12 @@ resource "aws_subnet" "netflix_clone_subnet_2" {
   cidr_block        = "10.0.2.0/24"
   availability_zone = "us-east-1b"
   tags = {
-    Name = "CE5-Group-3-Subnet2-${var.branch_name}-NetflixClone"
+    Name = "ce5-group-3-subnet2-${var.branch_name}-netflixclone"
   }
 }
 
 resource "aws_eks_cluster" "eks_cluster" {
-  name     = "CE5-Group-3-EKSCluster-${var.branch_name}-NetflixClone"
+  name     = "ce5-group-3-ekscluster-${var.branch_name}-netflixclone"
   role_arn = aws_iam_role.eks_cluster_role.arn
   vpc_config {
     subnet_ids = [
@@ -46,7 +46,7 @@ resource "aws_eks_cluster" "eks_cluster" {
 }
 
 resource "aws_iam_role" "eks_cluster_role" {
-  name = "CE5-Group-3-EKSClusterRole-${var.branch_name}-NetflixClone"
+  name = "ce5-group-3-eks-cluster-role-${var.branch_name}-netflixclone"
   assume_role_policy = data.aws_iam_policy_document.eks_cluster_assume_role_policy.json
 }
 
@@ -61,15 +61,15 @@ resource "aws_iam_role_policy_attachment" "eks_service_policy" {
 }
 
 resource "aws_ecr_repository" "netflix_clone" {
-  name = "CE5-Group-3-ECRRepository-${var.branch_name}-NetflixClone"
+  name = "ce5-group-3-ecrrepository-${var.branch_name}-netflixclone"
 }
 
 resource "aws_ecs_cluster" "netflix_clone_cluster" {
-  name = "CE5-Group-3-ECSCluster-${var.branch_name}-NetflixClone"
+  name = "ce5-group-3-ecs-cluster-${var.branch_name}-netflixclone"
 }
 
 resource "aws_ecs_task_definition" "netflix_clone_task" {
-  family                   = "CE5-Group-3-ECSTask-${var.branch_name}-NetflixClone"
+  family                   = "ce5-group-3-ecs-task-${var.branch_name}-netflixclone"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = "256"
@@ -91,7 +91,7 @@ resource "aws_ecs_task_definition" "netflix_clone_task" {
 }
 
 resource "aws_iam_role" "ecs_task_execution_role" {
-  name = "CE5-Group-3-ECSTaskExecutionRole-${var.branch_name}-NetflixClone"
+  name = "ce5-group-3-ecs-task-execution-role-${var.branch_name}-netflixclone"
   assume_role_policy = jsonencode({
     Statement = [{
       Action    = "sts:AssumeRole"
@@ -110,7 +110,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution_policy" {
 }
 
 resource "aws_ecs_service" "netflix_clone_service" {
-  name            = "CE5-Group-3-ECSService-${var.branch_name}-NetflixClone"
+  name            = "ce5-group-3-ecs-service-${var.branch_name}-netflixclone"
   cluster         = aws_ecs_cluster.netflix_clone_cluster.id
   task_definition = aws_ecs_task_definition.netflix_clone_task.arn
   desired_count   = 1

@@ -78,7 +78,7 @@ jobs:
       run: |
         SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$(terraform output -raw vpc_id)" --query "Subnets[].SubnetId" --output text)
         for subnet in $SUBNET_IDS; do
-          aws ec2 create-tags --resources $subnet --tags Key=kubernetes.io/cluster/CE5-Group-3-EKSCluster-${{ github.ref_name }}-NetflixClone,Value=shared
+          aws ec2 create-tags --resources $subnet --tags Key=kubernetes.io/cluster/ce5-group-3-ekscluster-${{ github.ref_name }}-netflixclone,Value=shared
           aws ec2 create-tags --resources $subnet --tags Key=kubernetes.io/role/elb,Value=1
         done
       env:
