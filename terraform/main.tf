@@ -1,3 +1,14 @@
+data "aws_iam_policy_document" "eks_cluster_assume_role_policy" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    effect  = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["eks.amazonaws.com"]
+    }
+  }
+}
+
 resource "aws_vpc" "netflix_clone_vpc" {
   cidr_block = "10.0.0.0/16"
   tags = {
