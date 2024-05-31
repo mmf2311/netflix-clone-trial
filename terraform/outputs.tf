@@ -7,11 +7,9 @@ output "kubeconfig" {
 }
 
 output "subnet_ids" {
-  value = concat(
-    [aws_subnet.netflix_clone_subnet_1.id],
-    [aws_subnet.netflix_clone_subnet_2.id]
-  )
+  value = [aws_subnet.netflix_clone_subnet_1.id, aws_subnet.netflix_clone_subnet_2.id]
 }
+
 
 output "vpc_id" {
   value = aws_vpc.netflix_clone_vpc.id
