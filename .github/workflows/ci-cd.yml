@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: Advanced CI/CD Pipeline
 
 on:
   push:
@@ -24,8 +24,9 @@ jobs:
     - name: Login to Amazon ECR
       id: ecr-login
       uses: aws-actions/amazon-ecr-login@v1
+      with:
+        region: ${{ secrets.AWS_REGION }}
       env:
-        AWS_REGION: ${{ secrets.AWS_REGION }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
@@ -47,13 +48,42 @@ jobs:
         push: true
         tags: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/ce5-group-3-ecrrepository-${{ github.ref_name }}-netflixclone:latest
 
-    - name: Terraform Init and Apply
-      if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/stage' || github.ref == 'refs/heads/prod'
-      id: terraform
+  terraform_plan:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@v1
+
+    - name: Terraform Init and Plan
       run: |
         cd terraform
         terraform init
-        terraform apply -auto-approve -var branch_name=${{ github.ref_name }} -var aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}
+        terraform plan -out=tfplan -var branch_name=${{ github.ref_name }} -var aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}
+      env:
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
+        TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
+
+  terraform_apply:
+    runs-on: ubuntu-latest
+    needs: terraform_plan
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@v1
+
+    - name: Terraform Apply
+      run: |
+        cd terraform
+        terraform apply -auto-approve tfplan
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -85,7 +115,6 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
     - name: Generate kubeconfig
-      if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/stage' || github.ref == 'refs/heads/prod'
       run: |
         aws eks update-kubeconfig --name ${{ env.cluster_name }} --region ${{ secrets.AWS_REGION }} --kubeconfig /home/runner/.kube/config
       env:
@@ -93,8 +122,14 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
+  deploy:
+    runs-on: ubuntu-latest
+    needs: terraform_apply
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
     - name: Configure AWS credentials for kubectl
-      if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/stage' || github.ref == 'refs/heads/prod'
       run: |
         aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -105,7 +140,6 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
     - name: Deploy to Kubernetes
-      if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/stage' || github.ref == 'refs/heads/prod'
       run: |
         kubectl apply -f kubernetes/deployment.yml --validate=false
         kubectl apply -f kubernetes/service.yml --validate=false
