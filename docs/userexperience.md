@@ -101,3 +101,53 @@ This document provides an overview of what end users can expect when accessing t
 
 ## Conclusion
 This document provides an overview of the features and user experience of the Netflix clone application. It highlights the key functionalities, backend operations, and the secure and scalable infrastructure supporting the application. Future enhancements aim to further enrich the user experience and expand the application's capabilities.
+
+V2
+
+# User Experience
+
+## Introduction
+This document outlines the user experience for interacting with the Netflix Clone application.
+
+## Features
+1. **Search Movies**
+   - Users can search for movies by title.
+   - The application fetches movie data from the TMDB API and displays it.
+
+## Accessing the Application
+1. **Load Balancer URL**
+   - After deployment, access the application using the Load Balancer DNS name.
+
+2. **Endpoints**
+   - `/movies?title=<movie_title>`: Search for a movie by title.
+
+## Error Handling
+- Proper error messages are displayed if the movie is not found or if there are issues with the API.
+
+## Performance
+- The application is optimized to handle multiple requests simultaneously.
+- Deployed on a scalable Kubernetes cluster to handle varying load
+
+# User Experience
+
+## Introduction
+This document outlines the user experience for interacting with the Netflix Clone application.
+
+## Features
+1. **Search Movies**
+   - Users can search for movies by title.
+   - The application fetches movie data from the TMDB API and displays it.
+
+## Accessing the Application
+1. **Load Balancer URL**
+   - After deployment, access the application using the Load Balancer DNS name.
+
+2. **Endpoints**
+   - `/movies?title=<movie_title>`: Search for a movie by title.
+
+## Error Handling
+- Proper error messages are displayed if the movie is not found or if there are issues with the API.
+
+## Performance
+- The application is optimized to handle multiple requests simultaneously.
+- Deployed on a scalable Kubernetes cluster to handle varying load.

@@ -67,8 +67,8 @@ jobs:
 
     - name: Delete ECR Repositories
       run: |
-        REPOSITORY_NAMES=$(aws ecr describe-repositories --query "repositories[?contains(repositoryName, 'group-3-ecr-netflix-clone-${{ github.event.inputs.branch }}')].repositoryName" --output text)
-        for repo in $REPOSITORY_NAMES; do
+        REPOS=$(aws ecr describe-repositories --query "repositories[?contains(@.repositoryName, 'group-3-ecr-netflix-clone-${{ github.event.inputs.branch }}')].repositoryName" --output text)
+        for repo in $REPOS; do
           aws ecr delete-repository --repository-name $repo --force
         done
       env:

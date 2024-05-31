@@ -1,0 +1,2 @@
+Project Overview
+You are working on a Netflix clone application using GitHub, AWS resources, Docker, Terraform, API Gateway, Lambda, AWS Secrets Manager, ECR, ECS, SNS, SQS, EC2, multi-environment, Kubernetes, TMBD API, and other APIs for enhancements. The project involves creating a GitHub repository, automating CI/CD processes, and deploying the application to AWS.
