@@ -37,7 +37,7 @@ jobs:
 
     - name: Delete EKS Clusters
       run: |
-        CLUSTER_NAMES=$(aws eks list-clusters --query "clusters[?contains(@, 'group-3-eks-netflix-clone-${{ github.event.inputs.branch }}')]" --output text)
+        CLUSTER_NAMES=$(aws eks list-clusters --query "clusters[?contains(@, 'CE5-Group-3-EKSCluster-${{ github.event.inputs.branch }}-NetflixClone')]" --output text)
         for cluster in $CLUSTER_NAMES; do
           aws eks delete-cluster --name $cluster
         done
@@ -48,7 +48,7 @@ jobs:
 
     - name: Delete ECS Clusters
       run: |
-        CLUSTER_NAMES=$(aws ecs list-clusters --query "clusterArns[?contains(@, 'group-3-ecs-cluster-netflix-clone-${{ github.event.inputs.branch }}')]" --output text)
+        CLUSTER_NAMES=$(aws ecs list-clusters --query "clusterArns[?contains(@, 'CE5-Group-3-ECSCluster-${{ github.event.inputs.branch }}-NetflixClone')]" --output text)
         for cluster in $CLUSTER_NAMES; do
           SERVICES=$(aws ecs list-services --cluster $cluster --query "serviceArns" --output text)
           for service in $SERVICES; do
@@ -67,7 +67,7 @@ jobs:
 
     - name: Delete ECR Repositories
       run: |
-        REPOS=$(aws ecr describe-repositories --query "repositories[?contains(@.repositoryName, 'group-3-ecr-netflix-clone-${{ github.event.inputs.branch }}')].repositoryName" --output text)
+        REPOS=$(aws ecr describe-repositories --query "repositories[?contains(@.repositoryName, 'CE5-Group-3-ECRRepository-${{ github.event.inputs.branch }}-NetflixClone')].repositoryName" --output text)
         for repo in $REPOS; do
           aws ecr delete-repository --repository-name $repo --force
         done
@@ -78,7 +78,7 @@ jobs:
 
     - name: Delete VPCs
       run: |
-        VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=group-3-vpc-netflix-clone-${{ github.event.inputs.branch }}-*" --query "Vpcs[].VpcId" --output text)
+        VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=CE5-Group-3-VPC-${{ github.event.inputs.branch }}-NetflixClone-*" --query "Vpcs[].VpcId" --output text)
         for vpc in $VPC_IDS; do
           aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc" --query "RouteTables[].RouteTableId" --output text | xargs -I {} aws ec2 delete-route-table --route-table-id {}
           aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$vpc" --query "InternetGateways[].InternetGatewayId" --output text | xargs -I {} aws ec2 detach-internet-gateway --internet-gateway-id {} --vpc-id $vpc
