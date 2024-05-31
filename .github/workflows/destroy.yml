@@ -27,7 +27,7 @@ jobs:
       run: |
         cd terraform
         terraform init
-        terraform destroy -auto-approve -var branch_name=${{ github.event.inputs.branch }}
+        terraform destroy -auto-approve -var branch_name=${{ github.event.inputs.branch }} -var aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -37,9 +37,9 @@ jobs:
 
     - name: Delete EKS Clusters
       run: |
-        CLUSTER_NAMES=$(aws eks list-clusters --query "clusters[?contains(@, 'ce5-group-3-ekscluster-${{ github.event.inputs.branch }}-netflixclone')]" --output text)
+        CLUSTER_NAMES=$(aws eks list-clusters --query "clusters[?contains(@, 'ce5-group-3-ekscluster-${{ github.event.inputs.branch }}')]" --output text)
         for cluster in $CLUSTER_NAMES; do
-          aws eks delete-cluster --name $cluster || true
+          aws eks delete-cluster --name $cluster
         done
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -48,21 +48,17 @@ jobs:
 
     - name: Delete ECS Clusters
       run: |
-        CLUSTER_NAMES=$(aws ecs list-clusters --query "clusterArns[?contains(@, 'ce5-group-3-ecs-cluster-${{ github.event.inputs.branch }}-netflixclone')]" --output text)
+        CLUSTER_NAMES=$(aws ecs list-clusters --query "clusterArns[?contains(@, 'ce5-group-3-ecs-cluster-${{ github.event.inputs.branch }}')]" --output text)
         for cluster in $CLUSTER_NAMES; do
           SERVICES=$(aws ecs list-services --cluster $cluster --query "serviceArns" --output text)
           for service in $SERVICES; do
-            aws ecs delete-service --cluster $cluster --service $service --force || true
+            aws ecs delete-service --cluster $cluster --service $service --force
           done
           TASKS=$(aws ecs list-tasks --cluster $cluster --query "taskArns" --output text)
           for task in $TASKS; do
-            aws ecs stop-task --cluster $cluster --task $task || true
+            aws ecs stop-task --cluster $cluster --task $task
           done
-          TASK_DEFS=$(aws ecs list-task-definitions --query "taskDefinitionArns[?contains(@, 'ce5-group-3-ecstaskdefinition-${{ github.event.inputs.branch }}-netflixclone')]" --output text)
-          for task_def in $TASK_DEFS; do
-            aws ecs deregister-task-definition --task-definition $task_def || true
-          done
-          aws ecs delete-cluster --cluster $cluster || true
+          aws ecs delete-cluster --cluster $cluster
         done
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -71,15 +67,54 @@ jobs:
 
     - name: Delete VPCs
       run: |
-        VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=ce5-group-3-vpc-${{ github.event.inputs.branch }}-netflixclone-*" --query "Vpcs[].VpcId" --output text)
+        VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=ce5-group-3-vpc-${{ github.event.inputs.branch }}-netflixclone" --query "Vpcs[].VpcId" --output text)
         for vpc in $VPC_IDS; do
-          aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc" --query "RouteTables[].RouteTableId" --output text | xargs -I {} aws ec2 delete-route-table --route-table-id {} || true
-          aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$vpc" --query "InternetGateways[].InternetGatewayId" --output text | xargs -I {} aws ec2 detach-internet-gateway --internet-gateway-id {} --vpc-id $vpc || true
-          aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$vpc" --query "InternetGateways[].InternetGatewayId" --output text | xargs -I {} aws ec2 delete-internet-gateway --internet-gateway-id {} || true
-          aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$vpc" --query "NetworkInterfaces[].NetworkInterfaceId" --output text | xargs -I {} aws ec2 delete-network-interface --network-interface-id {} || true
-          aws ec2 describe-subnets --filters "Name=vpc-id,Values=$vpc" --query "Subnets[].SubnetId" --output text | xargs -I {} aws ec2 delete-subnet --subnet-id {} || true
-          aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$vpc" --query "SecurityGroups[].GroupId" --output text | xargs -I {} aws ec2 delete-security-group --group-id {} || true
-          aws ec2 delete-vpc --vpc-id $vpc || true
+          # Delete internet gateways
+          IGW_IDS=$(aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$vpc" --query "InternetGateways[].InternetGatewayId" --output text)
+          for igw in $IGW_IDS; do
+            aws ec2 detach-internet-gateway --internet-gateway-id $igw --vpc-id $vpc
+            aws ec2 delete-internet-gateway --internet-gateway-id $igw
+          done
+
+          # Delete subnets
+          SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$vpc" --query "Subnets[].SubnetId" --output text)
+          for subnet in $SUBNET_IDS; do
+            aws ec2 delete-subnet --subnet-id $subnet
+          done
+
+          # Delete route tables
+          ROUTE_TABLE_IDS=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc" --query "RouteTables[?Associations[0].Main==`false`].RouteTableId" --output text)
+          for rtb in $ROUTE_TABLE_IDS; do
+            aws ec2 delete-route-table --route-table-id $rtb
+          done
+
+          # Delete security groups
+          SG_IDS=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$vpc" --query "SecurityGroups[?GroupName!=`default`].GroupId" --output text)
+          for sg in $SG_IDS; do
+            aws ec2 delete-security-group --group-id $sg
+          done
+
+          # Finally, delete the VPC
+          aws ec2 delete-vpc --vpc-id $vpc
+        done
+      env:
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+    - name: Delete IAM Roles
+      run: |
+        IAM_ROLES=(
+          "ce5-group-3-eks-cluster-role-${{ github.event.inputs.branch }}-netflixclone"
+          "ce5-group-3-ecs-task-execution-role-${{ github.event.inputs.branch }}-netflixclone"
+        )
+        for role in "${IAM_ROLES[@]}"; do
+          # Detach policies before deleting the role
+          POLICY_ARN_LIST=$(aws iam list-attached-role-policies --role-name $role --query 'AttachedPolicies[].PolicyArn' --output text)
+          for policy_arn in $POLICY_ARN_LIST; do
+            aws iam detach-role-policy --role-name $role --policy-arn $policy_arn
+          done
+          aws iam delete-role --role-name $role
         done
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -88,27 +123,17 @@ jobs:
 
     - name: Delete ECR Repositories
       run: |
-        REPOS=$(aws ecr describe-repositories --query "repositories[?contains(repositoryName, 'ce5-group-3-ecrrepository-${{ github.event.inputs.branch }}-netflixclone')].repositoryName" --output text)
-        for repo in $REPOS; do
-          aws ecr delete-repository --repository-name $repo --force || true
-        done
+        aws ecr describe-repositories --query 'repositories[?starts_with(repositoryName, `ce5-group-3-ecrrepository-${{ github.event.inputs.branch }}-netflixclone`)].repositoryName' --output text | tr -d '\r' | xargs -n1 -I{} aws ecr delete-repository --repository-name {} --force
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-    - name: Detach IAM Policies and Delete IAM Roles
+    - name: Delete ECS Task Definitions
       run: |
-        IAM_ROLES=(
-          "ce5-group-3-eks-cluster-role-${{ github.event.inputs.branch }}-netflixclone"
-          "ce5-group-3-ecs-task-execution-role-${{ github.event.inputs.branch }}-netflixclone"
-        )
-        for role in "${IAM_ROLES[@]}"; do
-          POLICY_ARNS=$(aws iam list-attached-role-policies --role-name $role --query "AttachedPolicies[].PolicyArn" --output text || true)
-          for policy_arn in $POLICY_ARNS; do
-            aws iam detach-role-policy --role-name $role --policy-arn $policy_arn || true
-          done
-          aws iam delete-role --role-name $role || true
+        TASK_DEFINITION_ARNS=$(aws ecs list-task-definitions --query 'taskDefinitionArns[?contains(@, `ce5-group-3-ecs-task-${{ github.event.inputs.branch }}-netflixclone`)]' --output text)
+        for task_definition in $TASK_DEFINITION_ARNS; do
+          aws ecs deregister-task-definition --task-definition $task_definition
         done
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
