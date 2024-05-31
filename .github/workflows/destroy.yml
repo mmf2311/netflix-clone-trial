@@ -65,17 +65,6 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-    - name: Delete Task Definitions
-      run: |
-        TASK_DEFINITION_ARN=$(aws ecs list-task-definitions --query "taskDefinitionArns[?contains(@, 'group-3-ecs-task-netflix-clone-${{ github.event.inputs.branch }}-')]" --output text)
-        for task_definition in $TASK_DEFINITION_ARN; do
-          aws ecs deregister-task-definition --task-definition $task_definition || true
-        done
-      env:
-        AWS_REGION: ${{ secrets.AWS_REGION }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
     - name: Delete IAM Roles
       run: |
         IAM_ROLES=(
@@ -96,7 +85,7 @@ jobs:
 
     - name: Delete VPCs
       run: |
-        VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=ce5-group-3-vpc-${{ github.event.inputs.branch }}-netflixclone-*" --query "Vpcs[].VpcId" --output text)
+        VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=ce5-group-3-vpc-${{ github.event.inputs.branch }}-netflixclone" --query "Vpcs[].VpcId" --output text)
         for vpc in $VPC_IDS; do
           echo "Deleting dependencies for VPC: $vpc"
           
