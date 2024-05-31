@@ -39,7 +39,7 @@ jobs:
       run: |
         CLUSTER_NAMES=$(aws eks list-clusters --query "clusters[?contains(@, 'ce5-group-3-ekscluster-${{ github.event.inputs.branch }}-netflixclone')]" --output text)
         for cluster in $CLUSTER_NAMES; do
-          aws eks delete-cluster --name $cluster
+          aws eks delete-cluster --name $cluster || true
         done
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -52,13 +52,13 @@ jobs:
         for cluster in $CLUSTER_NAMES; do
           SERVICES=$(aws ecs list-services --cluster $cluster --query "serviceArns" --output text)
           for service in $SERVICES; do
-            aws ecs delete-service --cluster $cluster --service $service --force
+            aws ecs delete-service --cluster $cluster --service $service --force || true
           done
           TASKS=$(aws ecs list-tasks --cluster $cluster --query "taskArns" --output text)
           for task in $TASKS; do
-            aws ecs stop-task --cluster $cluster --task $task
+            aws ecs stop-task --cluster $cluster --task $task || true
           done
-          aws ecs delete-cluster --cluster $cluster
+          aws ecs delete-cluster --cluster $cluster || true
         done
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -69,7 +69,7 @@ jobs:
       run: |
         TASK_DEFINITION_ARN=$(aws ecs list-task-definitions --query "taskDefinitionArns[?contains(@, 'group-3-ecs-task-netflix-clone-${{ github.event.inputs.branch }}-')]" --output text)
         for task_definition in $TASK_DEFINITION_ARN; do
-          aws ecs deregister-task-definition --task-definition $task_definition
+          aws ecs deregister-task-definition --task-definition $task_definition || true
         done
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -83,9 +83,9 @@ jobs:
           "ce5-group-3-ecs-task-execution-role-${{ github.event.inputs.branch }}-netflixclone"
         )
         for role in "${IAM_ROLES[@]}"; do
-          POLICIES=$(aws iam list-attached-role-policies --role-name $role --query "AttachedPolicies[].PolicyArn" --output text)
+          POLICIES=$(aws iam list-attached-role-policies --role-name $role --query "AttachedPolicies[].PolicyArn" --output text || true)
           for policy in $POLICIES; do
-            aws iam detach-role-policy --role-name $role --policy-arn $policy
+            aws iam detach-role-policy --role-name $role --policy-arn $policy || true
           done
           aws iam delete-role --role-name $role || true
         done
@@ -98,12 +98,24 @@ jobs:
       run: |
         VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=ce5-group-3-vpc-${{ github.event.inputs.branch }}-netflixclone-*" --query "Vpcs[].VpcId" --output text)
         for vpc in $VPC_IDS; do
-          aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc" --query "RouteTables[].RouteTableId" --output text | xargs -I {} aws ec2 delete-route-table --route-table-id {}
-          aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$vpc" --query "InternetGateways[].InternetGatewayId" --output text | xargs -I {} aws ec2 detach-internet-gateway --internet-gateway-id {} --vpc-id $vpc
-          aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$vpc" --query "InternetGateways[].InternetGatewayId" --output text | xargs -I {} aws ec2 delete-internet-gateway --internet-gateway-id {}
-          aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$vpc" --query "SecurityGroups[].GroupId" --output text | xargs -I {} aws ec2 delete-security-group --group-id {}
-          aws ec2 describe-subnets --filters "Name=vpc-id,Values=$vpc" --query "Subnets[].SubnetId" --output text | xargs -I {} aws ec2 delete-subnet --subnet-id {}
-          aws ec2 delete-vpc --vpc-id $vpc
+          SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$vpc" --query "Subnets[].SubnetId" --output text)
+          for subnet in $SUBNET_IDS; do
+            aws ec2 delete-subnet --subnet-id $subnet || true
+          done
+          ROUTE_TABLE_IDS=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc" --query "RouteTables[].RouteTableId" --output text)
+          for rt in $ROUTE_TABLE_IDS; do
+            aws ec2 delete-route-table --route-table-id $rt || true
+          done
+          IGW_IDS=$(aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$vpc" --query "InternetGateways[].InternetGatewayId" --output text)
+          for igw in $IGW_IDS; do
+            aws ec2 detach-internet-gateway --internet-gateway-id $igw --vpc-id $vpc || true
+            aws ec2 delete-internet-gateway --internet-gateway-id $igw || true
+          done
+          SG_IDS=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$vpc" --query "SecurityGroups[].GroupId" --output text)
+          for sg in $SG_IDS; do
+            aws ec2 delete-security-group --group-id $sg || true
+          done
+          aws ec2 delete-vpc --vpc-id $vpc || true
         done
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
