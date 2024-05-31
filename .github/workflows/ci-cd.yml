@@ -66,7 +66,7 @@ jobs:
         echo "cluster_name=$(terraform output -raw cluster_name)" >> $GITHUB_ENV
         echo "kubeconfig=$(terraform output -raw kubeconfig)" >> $GITHUB_ENV
         echo "vpc_id=$(terraform output -raw vpc_id)" >> $GITHUB_ENV
-        echo "subnet_ids=$(terraform output -json subnet_ids | jq -r '.[]')" >> $GITHUB_ENV
+        echo "subnet_ids=$(terraform output -raw subnet_ids)" >> $GITHUB_ENV
       env:
         AWS_REGION: ${{ secrets.AWS_REGION }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
