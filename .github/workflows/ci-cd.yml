@@ -62,6 +62,14 @@ jobs:
         TF_VAR_tmdb_api_key: ${{ secrets.TMDB_API_KEY }}
         TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
 
+    - name: Verify Terraform Outputs
+      run: |
+        terraform output
+      env:
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
     - name: Export Terraform Outputs
       id: export-outputs
       run: |
@@ -76,7 +84,7 @@ jobs:
 
     - name: Tag Subnets for Load Balancer
       run: |
-        echo "${{ env.subnet_ids }}" | jq -r '.[]' | while read subnet; do
+        for subnet in $(echo ${{ env.subnet_ids }} | jq -r '.[]'); do
           aws ec2 create-tags --resources $subnet --tags Key=kubernetes.io/cluster/${{ env.cluster_name }},Value=shared
           aws ec2 create-tags --resources $subnet --tags Key=kubernetes.io/role/elb,Value=1
         done
