@@ -76,7 +76,7 @@ jobs:
 
     - name: Tag Subnets for Load Balancer
       run: |
-        for subnet in ${{ env.subnet_ids }}; do
+        echo "${{ env.subnet_ids }}" | jq -r '.[]' | while read subnet; do
           aws ec2 create-tags --resources $subnet --tags Key=kubernetes.io/cluster/${{ env.cluster_name }},Value=shared
           aws ec2 create-tags --resources $subnet --tags Key=kubernetes.io/role/elb,Value=1
         done
